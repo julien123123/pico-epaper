@@ -427,7 +427,16 @@ class Eink(EinkBase):
         self._send_command(0x20)
         self._read_busy()
 
+class EPDPico(Eink):
+    def __init__(self, spi=None, *args, **kwargs):
+        super().__init__(spi, *args, **kwargs)
 
+class EPD2IN9(Eink):
+    def __init__(self, spi=None, *args, **kwargs):
+        super().__init__(spi, *args, **kwargs)
+
+'''
+# Unfortunatly, I cannot maintain this.
 class EinkPIO(EinkBase):
     from machine import mem32
 
@@ -521,7 +530,7 @@ class EinkPIO(EinkBase):
 
         if self._horizontal:
             self._normal_output()
-
+'''
     # --------------------------------------------------------
     # Public methods.
     # --------------------------------------------------------
