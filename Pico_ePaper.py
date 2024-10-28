@@ -98,13 +98,13 @@ class EinkBase:
 
     def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False):
         if rotation == 0 or rotation == 180:
-            self.width = 280
-            self.height = 480
+            self.width = self.short
+            self.height = self.long
             buf_format = framebuf.MONO_HLSB
             self._horizontal = False
         elif rotation == 90 or rotation == 270:
-            self.width = 480
-            self.height = 280
+            self.width = self.long
+            self.height = self.short
             buf_format = framebuf.MONO_VLSB
             self._horizontal = True
         else:
@@ -160,6 +160,9 @@ class EinkBase:
         self._buffer_bw = self._buffer_bw_actual
         self._bw = self._bw_actual
 
+        # Flag to tell if the window size instruction was sent
+        self.wndw_set = False
+
         self.fill()
 
         self._init_disp()
@@ -196,16 +199,26 @@ class EinkBase:
         self._send(0x4f, pack("h", y))
 
     def _set_window(self, start_x, end_x, start_y, end_y):
-        self._send(0x44, pack("2h", start_x, end_x))
+        self._send(0x44, pack("2B", start_x, end_x)) #trying 2b instead of the original 2H of the pico
         self._send(0x45, pack("2h", start_y, end_y))
 
-    def _clear_ram(self, bw=True, red=True):
-        if red:
-            self._send(0x46, 0xf7)
-            self._read_busy()
-        if bw:
-            self._send(0x47, 0xf7)
-            self._read_busy()
+    def _clear_ram():
+        raise NotImplementedError
+    
+    def _set_gate_nb():
+        raise NotImplementedError
+    
+    def _set_voltage():
+        pass
+
+    def _set_VCOM():
+        pass
+
+    def _virtual_width():
+        raise NotImplementedError
+    
+    def _updt_ctrl_2():
+        pass
 
     def _init_disp(self):
         # HW reset.
@@ -213,19 +226,14 @@ class EinkBase:
 
         # SW reset.
         self._send_command(0x12)
-        sleep_ms(300)
+        sleep_ms(20)
 
         # Clear BW and RED RAMs.
         self._clear_ram()
 
-        # Set gate number.
-        self._send(0x01, pack("hB", 479, 0))
-
-        # Set gate voltage.
-        self._send(0x03, 0x00)
-
-        # Set source voltage.
-        self._send(0x04, pack("3B", 0x41, 0xa8, 0x32))
+        # Set gate/voltages according to each screeb
+        self._set_gate_nb()
+        self._set_voltage()
 
         # Set Data Entry mode.
         if self._rotation == 0:
@@ -250,23 +258,21 @@ class EinkBase:
         # Internal sensor on.
         self._send(0x18, 0x80)
 
-        # Set VCOM.
-        self._send(0x2c, 0x44)
+        self._set_VCOM()
 
         # Set window.
         if self._rotation == 0:
-            self._set_window(0, self.width - 1, 0, self.height - 1)
+            self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
         elif self._rotation == 180:
-            self._set_window(self.width - 1, 0, self.height - 1, 0)
+            self._set_window(self._virtual_width(self.width) - 1, 0, self.height - 1, 0)
         elif self._rotation == 90:
-            self._set_window(self.height - 1, 0, 0, self.width - 1)
+            self._set_window(self._virtual_width(self.height) - 1, 0, 0, self.width - 1)
         elif self._rotation == 270:
-            self._set_window(0, self.height - 1, self.width - 1, 0)
+            self._set_window(0, self._virtual_width(self.height) - 1, self.width - 1, 0)
         else:
             raise ValueError(f"Incorrect rotation selected")
 
-        # Set Display Update Control 2
-        self._send(0x22, 0xcf)
+        self._updt_ctrl_2()
 
     # --------------------------------------------------------
     # Public methods.
@@ -293,13 +299,13 @@ class EinkBase:
             self._bw = self._bw_actual
         self._partial = False
 
-    def show(self, lut=0):
+    def zero(self, lut=0):
         if self._rotation == 0:
             self._set_cursor(0, 0)
         elif self._rotation == 180:
-            self._set_cursor(self.width - 1, self.height - 1)
+            self._set_cursor(self._virtual_width(self.width) - 1, self.height - 1)
         elif self._rotation == 90:
-            self._set_cursor(self.height - 1, 0)
+            self._set_cursor(self._virtual_width(self.height) - 1, 0)
         else:
             self._set_cursor(0, self.width - 1)
 
@@ -407,33 +413,114 @@ class Eink(EinkBase):
         else:
             self._send_data(buffer)
 
+    def _ld_norm_lut():
+        pass
+
+    def _ld_part_lut():
+        pass
+
     # --------------------------------------------------------
     # Public methods.
     # --------------------------------------------------------
-
+    
+    def send_diff_buff(self,buff):
+        self._send_command(0x26)
+        self._send_buffer(buff)
+    
+    def get_buff(self):
+        return self._buffer_red
+    
     # @profile
     def show(self, lut=0):
-        super().show()
+        super().zero()
 
         self._send_command(0x24)
         self._send_buffer(self._buffer_bw)
         if self._partial:
-            self._load_LUT(2)
+            self._ld_part_lut()
         else:
             self._send_command(0x26)
             self._send_buffer(self._buffer_red)
-            self._load_LUT(lut)
+            self._ld_norm_lut(lut)
 
         self._send_command(0x20)
         self._read_busy()
 
 class EPDPico(Eink):
+    
     def __init__(self, spi=None, *args, **kwargs):
+        self.long = 480
+        self.short = 280
         super().__init__(spi, *args, **kwargs)
+    
+    def _set_gate_nb(self):
+        # Set gate number.
+        self._send(0x01, pack("hB", 479, 0))
+
+    def _set_voltage(self):
+        # Set gate voltage.
+        self._send(0x03, 0x00)
+        # Set source voltage.
+        self._send(0x04, pack("3B", 0x41, 0xa8, 0x32))
+
+    def _set_VCOM(self):
+        self._send(0x2c, 0x44)
+
+    def _virtual_width(self, num = None):
+        ''' returns width the way it shoulf be sent to the chip'''
+        return self.width if not num else num
+    
+    def _updt_ctrl_2(self):
+        # Set Display Update Control 2
+        self._send(0x22, 0xcf)
+
+    def _clear_ram(self, bw=True, red=True):
+        if red:
+            self._send(0x46, 0xf7)
+            self._read_busy()
+        if bw:
+            self._send(0x47, 0xf7)
+            self._read_busy()
+
+    def _ld_norm_lut(self,l):
+        self._load_LUT(l)
+        
+    def _snd_part_lut(self):
+        self._load_LUT(2)
+
 
 class EPD2IN9(Eink):
+
     def __init__(self, spi=None, *args, **kwargs):
+        self.long = 296
+        self.short = 128
         super().__init__(spi, *args, **kwargs)
+
+    def _set_gate_nb(self):
+        # Set gate number.
+        self._send(0x01, pack("3B", 0x27, 0x01, 0x00))
+
+    def _virtual_width(self, num = None):
+        ''' returns width the way it is sent to the chip'''
+        return self.width // 8 if not num else num // 8
+
+    def _clear_ram(self, bw=True, red=True): #0k, modifié la commande pour 0xe5
+        if red:
+            self._send(0x46, 0xe5)
+            self._read_busy()
+        if bw:
+            self._send(0x47, 0xe5)
+            self._read_busy()
+    
+    def show(self):
+        # Set Display Update Control 2 / loading LUTs
+        if not self._partial:
+            self._send(0x22, 0xf7)
+        else:
+            self._send(0x22, 0xff)
+        self._read_busy()
+        super().show()
+
 
 '''
 # Unfortunatly, I cannot maintain this.
@@ -530,7 +617,6 @@ class EinkPIO(EinkBase):
 
         if self._horizontal:
             self._normal_output()
-'''
     # --------------------------------------------------------
     # Public methods.
     # --------------------------------------------------------
@@ -549,7 +635,7 @@ class EinkPIO(EinkBase):
 
         self._send_command(0x20)
         self._read_busy()
-
+'''
 
 if __name__ == "__main__":
     from uarray import array
