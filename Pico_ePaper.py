@@ -638,57 +638,11 @@ class EinkPIO(EinkBase):
 '''
 
 if __name__ == "__main__":
-    from uarray import array
-    from time import sleep
-
-    epd = EinkPIO(rotation=270, use_partial_buffer=True)
-    epd.fill()
-
-    epd.text("test", 10, 10)
-    epd.rect(0, 19, 52, 10, epd.lightgray, f=True)
-    epd.text("test", 10, 20, epd.darkgray)
-    epd.rect(0, 29, 52, 10, epd.darkgray, f=True)
-    epd.text("test", 10, 30, epd.lightgray)
-    epd.rect(0, 39, 52, 10, f=True)
-    epd.text("test", 10, 40, epd.white)
-    epd.rect(0, 8, 52, 41)
-
-    epd.hline(5, 60, 50)
-    epd.hline(5, 160, 50)
-    epd.vline(5, 60, 100)
-    epd.vline(55, 60, 100)
-    epd.line(5, 60, 55, 160)
-    epd.line(55, 60, 5, 160)
-
-    epd.rect(65, 20, 50, 50, f=True)
-    epd.rect(65, 70, 50, 50, epd.darkgray, f=True)
-    epd.rect(65, 120, 50, 50, epd.lightgray, f=True)
-    epd.rect(65, 170, 50, 50, f=True)
-    epd.rect(65, 20, 50, 200)
-
-    epd.ellipse(150, 120, 25, 100, epd.lightgray, f=True, m=0b1010)
-    epd.ellipse(150, 120, 25, 100, epd.darkgray, f=True, m=0b0101)
-    epd.ellipse(150, 120, 25, 25, f=True)
-    epd.ellipse(150, 120, 10, 10, epd.white, f=True)
-
+    from machine import SPI
+    
+    p = Pin(2, Pin.OUT) #To restet the epd
+    epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
+    epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+    epd.text('hello', 19, 19)
     epd.show()
-
-    epd.sleep()
-    sleep(5)
-    # To use the screen after putting it to sleep, the reinitialisation is required.
-    epd.reinit()
-    bestagon = array('h', [0, 0, 50, 0, 75, 43, 50, 86, 0, 86, -25, 43])
-    epd.poly(205, 77, bestagon, c=epd.darkgray, f=True)
-
-    epd.show()
-
-    epd.partial_mode_on()
-
-    for i in range(10):
-        epd.text(str(i), 10, 200)
-        epd.show()
-        epd.text(str(i), 10, 200, epd.white)
-
-    epd.partial_mode_off()
-
     epd.sleep()

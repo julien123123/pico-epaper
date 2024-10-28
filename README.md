@@ -1,10 +1,19 @@
-# Pico_ePaper
+# Pico_ePaper WIP
 
 <div align="center">
 
 ![HelloThere](img/hello.jpg)
 
 </div>
+
+I am currently working on expanding functionalities of the original Pico ePaper library. I want to add:
+- Support for 2.9in epaper display
+- Support for partial update after deepsleep
+- Support for partial update on smaller parts of the display to save on ressources
+
+I've made it worked on some of my project, but I figured it would be easyer for me in the future if my modifications are well written in one library.
+
+Here's the rest of the normal readme:
 
 This module is a basic driver for Waveshare [Pico e-Paper 3.7 display](https://www.waveshare.com/wiki/Pico-ePaper-3.7).
 It supports grayscale mode and allows setting screen rotation. Drawing routines are compatible with
