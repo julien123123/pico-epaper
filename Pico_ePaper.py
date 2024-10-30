@@ -199,7 +199,7 @@ class EinkBase:
         self._send(0x4f, pack("h", y))
 
     def _set_window(self, start_x, end_x, start_y, end_y):
-        self._send(0x44, pack("2B", start_x, end_x)) #trying 2b instead of the original 2H of the pico
+        self._send(0x44, pack("2B", start_x, end_x)) #trying 2b instead of the original 2H of the pico: works for both
         self._send(0x45, pack("2h", start_y, end_y))
 
     def _clear_ram():
@@ -208,16 +208,16 @@ class EinkBase:
     def _set_gate_nb():
         raise NotImplementedError
     
-    def _set_voltage():
+    def _set_voltage(self):
         pass
 
-    def _set_VCOM():
+    def _set_VCOM(self):
         pass
 
     def _virtual_width():
         raise NotImplementedError
     
-    def _updt_ctrl_2():
+    def _updt_ctrl_2(self):
         pass
 
     def _init_disp(self):
@@ -413,10 +413,10 @@ class Eink(EinkBase):
         else:
             self._send_data(buffer)
 
-    def _ld_norm_lut():
+    def _ld_norm_lut(self, lut):
         pass
 
-    def _ld_part_lut():
+    def _ld_part_lut(self):
         pass
 
     # --------------------------------------------------------
@@ -639,10 +639,21 @@ class EinkPIO(EinkBase):
 
 if __name__ == "__main__":
     from machine import SPI
-    
-    p = Pin(2, Pin.OUT) #To restet the epd
-    epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-    epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+    import os
+    if os.uname().sysname == 'nrf52':
+        p = Pin(2, Pin.OUT)
+        epdSPI = SPI(2, sck=Pin(45), baudrate=400000, mosi=Pin(47), miso=0)
+        epd = EPD2IN9(rotation=90, spi=epdSPI, cs_pin=Pin(3), dc_pin=Pin(29), reset_pin=p, busy_pin=Pin(5), use_partial_buffer=True)
+
+    else:
+        p = Pin(2, Pin.OUT) #To restet the epd
+        epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
+        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+    import time
     epd.text('hello', 19, 19)
+    epd.show()
+    time.sleep(3)
+    epd.partial_mode_on()
+    epd.text('PIPI CACA', 30, 30)
     epd.show()
     epd.sleep()
