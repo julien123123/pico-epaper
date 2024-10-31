@@ -162,6 +162,7 @@ class EinkBase:
 
         # Flag to tell if the window size instruction was sent
         self.wndw_set = False
+        self.inited = False # inited flag
 
         self.fill()
 
@@ -219,6 +220,22 @@ class EinkBase:
     
     def _updt_ctrl_2(self):
         pass
+    '''
+    def _set_window(self, width = None, height = None):
+
+        if self._rotation == 0:
+            self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
+        elif self._rotation == 180:
+            self._set_window(self._virtual_width(self.width) - 1, 0, self.height - 1, 0)
+        elif self._rotation == 90:
+            self._set_window(self._virtual_width(self.height) - 1, 0, 0, self.width - 1)
+        elif self._rotation == 270:
+            self._set_window(0, self._virtual_width(self.height) - 1, self.width - 1, 0)
+        else:
+            raise ValueError(f"Incorrect rotation selected")
+        
+        self.wndw_set = True
+    '''
 
     def _init_disp(self):
         # HW reset.
@@ -231,7 +248,7 @@ class EinkBase:
         # Clear BW and RED RAMs.
         self._clear_ram()
 
-        # Set gate/voltages according to each screeb
+        # Set gate/voltages according to each display
         self._set_gate_nb()
         self._set_voltage()
 
@@ -273,6 +290,7 @@ class EinkBase:
             raise ValueError(f"Incorrect rotation selected")
 
         self._updt_ctrl_2()
+        self.inited = True
 
     # --------------------------------------------------------
     # Public methods.
@@ -311,6 +329,8 @@ class EinkBase:
 
     def sleep(self):
         self._send(0x10, 0x03)
+        self.inited = False
+        self.wndw_set = False
 
     # --------------------------------------------------------
     # Drawing routines (wrappers for FrameBuffer methods).
@@ -416,7 +436,7 @@ class Eink(EinkBase):
     def _ld_norm_lut(self, lut):
         pass
 
-    def _ld_part_lut(self):
+    def _ld_part_lut(self, lut):
         pass
 
     # --------------------------------------------------------
@@ -437,7 +457,7 @@ class Eink(EinkBase):
         self._send_command(0x24)
         self._send_buffer(self._buffer_bw)
         if self._partial:
-            self._ld_part_lut()
+            self._ld_part_lut(2)
         else:
             self._send_command(0x26)
             self._send_buffer(self._buffer_red)
@@ -445,6 +465,17 @@ class Eink(EinkBase):
 
         self._send_command(0x20)
         self._read_busy()
+
+    def eco_show(self):
+        if self.inited:
+            raise Exception('must be used after sleep() method')
+        else:
+            self.reinit()
+            self.partial_mode_on()
+            # method for automatically toggling buffers after epd.sleep
+            self.show()
+            self.sleep()
+
 
 class EPDPico(Eink):
     
@@ -485,8 +516,8 @@ class EPDPico(Eink):
     def _ld_norm_lut(self,l):
         self._load_LUT(l)
         
-    def _snd_part_lut(self):
-        self._load_LUT(2)
+    def _snd_part_lut(self,l):
+        self._load_LUT(l)
 
 
 class EPD2IN9(Eink):
@@ -650,10 +681,12 @@ if __name__ == "__main__":
         epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
         epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
     import time
+    
     epd.text('hello', 19, 19)
     epd.show()
     time.sleep(3)
     epd.partial_mode_on()
     epd.text('PIPI CACA', 30, 30)
     epd.show()
+    epd.partial_mode_off()
     epd.sleep()
