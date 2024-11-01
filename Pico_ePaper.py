@@ -301,15 +301,19 @@ class EinkBase:
         self._init_disp()
 
     def partial_mode_on(self):
+        print('Wiiiiii')
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
             self._buffer_bw = self._buffer_partial
             self._bw = self._part
-        self._part.fill(1)
+            self._part.fill(1)
+        else:
+            self._bw.fill(1)
         self._partial = True
 
     def partial_mode_off(self):
+        print('nooooo')
         self._send(0x37, pack("10B", 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
         self._clear_ram()
         if self._use_partial_buffer:
@@ -436,7 +440,7 @@ class Eink(EinkBase):
     def _ld_norm_lut(self, lut):
         pass
 
-    def _ld_part_lut(self, lut):
+    def _ld_part_lut(self):
         pass
 
     # --------------------------------------------------------
@@ -457,7 +461,7 @@ class Eink(EinkBase):
         self._send_command(0x24)
         self._send_buffer(self._buffer_bw)
         if self._partial:
-            self._ld_part_lut(2)
+            self._ld_part_lut()
         else:
             self._send_command(0x26)
             self._send_buffer(self._buffer_red)
@@ -514,10 +518,11 @@ class EPDPico(Eink):
             self._read_busy()
 
     def _ld_norm_lut(self,l):
+        print(l)
         self._load_LUT(l)
         
-    def _snd_part_lut(self,l):
-        self._load_LUT(l)
+    def _ld_part_lut(self):
+        self._load_LUT(2)
 
 
 class EPD2IN9(Eink):
@@ -679,7 +684,7 @@ if __name__ == "__main__":
     else:
         p = Pin(2, Pin.OUT) #To restet the epd
         epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False) #Epaper setup (instance of EINK)
     import time
     
     epd.text('hello', 19, 19)
@@ -688,5 +693,10 @@ if __name__ == "__main__":
     epd.partial_mode_on()
     epd.text('PIPI CACA', 30, 30)
     epd.show()
-    epd.partial_mode_off()
-    epd.sleep()
+    epd.fill()
+    epd.ellipse(60,60,10,10,f = True)
+    epd.show()
+    epd.rect(50,100,50,10,f=True)
+    epd.show()
+    #epd.partial_mode_off()
+    #epd.sleep()
