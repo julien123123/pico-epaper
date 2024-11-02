@@ -87,14 +87,13 @@ def profile(func):
 
 
 class EinkBase:
-    black = 0b00
-    white = 0b11
-    darkgray = 0b01
-    lightgray = 0b10
-
-    RAM_BW = 0b01
-    RAM_RED = 0b10
-    RAM_RBW = 0b11
+    black = const(0b00)
+    white = 0
+    darkgray = 0
+    lightgray = 0
+    RAM_BW  = const(0b01)
+    RAM_RED = const(0b10)
+    RAM_RBW = const(0b11)
 
     def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False):
         if rotation == 0 or rotation == 180:
@@ -136,11 +135,6 @@ class EinkBase:
         else:
             self._busy = busy_pin
             self._busy.init(Pin.IN)
-
-        self._luts = {0: EPD_3IN7_lut_4Gray_GC,
-                      1: EPD_3IN7_lut_1Gray_GC,
-                      2: EPD_3IN7_lut_1Gray_DU,
-                      3: EPD_3IN7_lut_1Gray_A2}
 
         self._buffer_bw_actual = bytearray(self.width * self.height // 8)
         self._buffer_red = bytearray(self.width * self.height // 8)
@@ -221,7 +215,7 @@ class EinkBase:
     def _updt_ctrl_2(self):
         pass
     '''
-    def _set_window(self, width = None, height = None):
+    def _set_full_frame(self, width = None, height = None):
 
         if self._rotation == 0:
             self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
@@ -301,7 +295,6 @@ class EinkBase:
         self._init_disp()
 
     def partial_mode_on(self):
-        print('Wiiiiii')
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
@@ -313,7 +306,6 @@ class EinkBase:
         self._partial = True
 
     def partial_mode_off(self):
-        print('nooooo')
         self._send(0x37, pack("10B", 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
         self._clear_ram()
         if self._use_partial_buffer:
@@ -340,7 +332,8 @@ class EinkBase:
     # Drawing routines (wrappers for FrameBuffer methods).
     # --------------------------------------------------------
 
-    def fill(self, c=white):
+    def fill(self, c=None):
+        c = self.white if not c else c
         self._bw.fill(c & 1)
         if not self._partial:
             self._red.fill(c >> 1)
@@ -393,6 +386,7 @@ class EinkBase:
 
 
 class Eink(EinkBase):
+
     from machine import SPI
 
     def __init__(self, spi=None, *args, **kwargs):
@@ -482,10 +476,20 @@ class Eink(EinkBase):
 
 
 class EPDPico(Eink):
-    
+
+    white =     0b11
+    darkgray =  0b01
+    lightgray = 0b10
+        
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 480
         self.short = 280
+
+        self._luts = (EPD_3IN7_lut_4Gray_GC,
+                EPD_3IN7_lut_1Gray_GC,
+                EPD_3IN7_lut_1Gray_DU,
+                EPD_3IN7_lut_1Gray_A2)
+
         super().__init__(spi, *args, **kwargs)
     
     def _set_gate_nb(self):
@@ -518,7 +522,6 @@ class EPDPico(Eink):
             self._read_busy()
 
     def _ld_norm_lut(self,l):
-        print(l)
         self._load_LUT(l)
         
     def _ld_part_lut(self):
@@ -526,8 +529,15 @@ class EPDPico(Eink):
 
 
 class EPD2IN9(Eink):
+    
+    white =     0b01
+    darkgray =  0b10
+    lightgray = 0b11
 
     def __init__(self, spi=None, *args, **kwargs):
+        
+        self._colours = (0b00, 0b01, 0b10, 0b11) # black, white, darkgray lightgray
+        
         self.long = 296
         self.short = 128
         super().__init__(spi, *args, **kwargs)
@@ -698,5 +708,5 @@ if __name__ == "__main__":
     epd.show()
     epd.rect(50,100,50,10,f=True)
     epd.show()
-    #epd.partial_mode_off()
-    #epd.sleep()
+    epd.partial_mode_off()
+    epd.sleep()
