@@ -94,6 +94,7 @@ class EinkBase:
     RAM_BW  = const(0b01)
     RAM_RED = const(0b10)
     RAM_RBW = const(0b11)
+    x_set = 0 # format to send x width to the display
 
     def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False, monochrome=True):
         if rotation == 0 or rotation == 180:
@@ -220,7 +221,7 @@ class EinkBase:
         self._send(0x4f, pack("h", y))
 
     def _set_window(self, start_x, end_x, start_y, end_y):
-        self._send(0x44, pack("2B", start_x, end_x)) #trying 2b instead of the original 2H of the pico: works for both
+        self._send(0x44, pack(self.x_set, start_x, end_x)) #trying 2b instead of the original 2H of the pico: works for both
         self._send(0x45, pack("2h", start_y, end_y))
 
     def _clear_ram():
@@ -309,7 +310,6 @@ class EinkBase:
         else:
             raise ValueError(f"Incorrect rotation selected")
 
-        self._updt_ctrl_2()
         self.inited = True
 
     # --------------------------------------------------------
@@ -414,7 +414,6 @@ class EinkBase:
         if (ram >> 1) & 1 == 1:
             self.red.blit(fbuf, x, y, key, palette)
 
-
 class Eink(EinkBase):
 
     from machine import SPI
@@ -454,7 +453,7 @@ class Eink(EinkBase):
         for i in range(8):
             result = (result << 1) | ((num >> i) & 1)
         return result
-
+    
     def _send_buffer(self, buffer):
         if self._horizontal:
             self._send_data(bytes(map(self._reverse_bits, buffer)))
@@ -476,10 +475,12 @@ class Eink(EinkBase):
         self._send_buffer(buff)
     
     def get_buff(self):
-        return self._buffer_red
+        return self._buffer_bw_actual
     
     # @profile
     def show(self, lut=0):
+        #should set frame here if not set
+        self._updt_ctrl_2()
         super().zero()
 
         self._send_command(0x24)
@@ -504,12 +505,12 @@ class Eink(EinkBase):
             self.show()
             self.sleep()
 
-
 class EPDPico(Eink):
 
     white =     0b11
     darkgray =  0b01
     lightgray = 0b10
+    x_set = '2H'
         
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 480
@@ -540,8 +541,11 @@ class EPDPico(Eink):
         return self.width if not num else num
     
     def _updt_ctrl_2(self):
-        # Set Display Update Control 2
-        self._send(0x22, 0xcf)
+        # Set Display Update Control 2 
+        if not self._partial:
+            self._send(0x22, 0xc7)
+        else:
+            self._send(0x22, 0xcf)
 
     def _clear_ram(self, bw=True, red=True):
         if red:
@@ -557,12 +561,12 @@ class EPDPico(Eink):
     def _ld_part_lut(self):
         self._load_LUT(2)
 
-
 class EPD2IN9(Eink):
     
     white =     0b01
     darkgray =  0b10
     lightgray = 0b11
+    x_set = '2B'
 
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 296
@@ -585,15 +589,13 @@ class EPD2IN9(Eink):
             self._send(0x47, 0xe5)
             self._read_busy()
     
-    def show(self):
+    def _updt_ctrl_2(self):
         # Set Display Update Control 2 / loading LUTs
         if not self._partial:
             self._send(0x22, 0xf7)
         else:
             self._send(0x22, 0xff)
         self._read_busy()
-        super().show()
-
 
 '''
 # Unfortunatly, I cannot maintain this.
@@ -726,6 +728,7 @@ if __name__ == "__main__":
     import time
     
     epd.text('hello', 19, 19)
+    epd.ellipse(200, 200, 90, 90, f=True)
     epd.show()
     time.sleep(3)
     epd.partial_mode_on()
