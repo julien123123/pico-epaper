@@ -221,7 +221,7 @@ class EinkBase:
         self._send(0x4f, pack("h", y))
 
     def _set_window(self, start_x, end_x, start_y, end_y):
-        self._send(0x44, pack(self.x_set, start_x, end_x)) #trying 2b instead of the original 2H of the pico: works for both
+        self._send(0x44, pack(self.x_set, start_x, end_x))
         self._send(0x45, pack("2h", start_y, end_y))
 
     def _clear_ram():
@@ -241,9 +241,9 @@ class EinkBase:
     
     def _updt_ctrl_2(self):
         pass
-    '''
-    def _set_full_frame(self, width = None, height = None):
-        if self.width and self.height in [self.long, self.short] # if the update does ecompass the entire display
+
+    def _set_frame(self):
+        '''Translates framebuffer frame size int display ic size'''
         if self._rotation == 0:
             self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
         elif self._rotation == 180:
@@ -256,7 +256,6 @@ class EinkBase:
             raise ValueError(f"Incorrect rotation selected")
         
         self.wndw_set = True
-    '''
 
     def _init_disp(self):
         # HW reset.
@@ -297,7 +296,7 @@ class EinkBase:
         self._send(0x18, 0x80)
 
         self._set_VCOM()
-
+        '''
         # Set window.
         if self._rotation == 0:
             self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
@@ -309,7 +308,7 @@ class EinkBase:
             self._set_window(0, self._virtual_width(self.height) - 1, self.width - 1, 0)
         else:
             raise ValueError(f"Incorrect rotation selected")
-
+        '''
         self.inited = True
 
     # --------------------------------------------------------
@@ -343,15 +342,16 @@ class EinkBase:
             self._bw = self._bw_actual
         self._partial = False
 
-    def zero(self, lut=0):
+    def zero(self,x =  None, y = None, lut=0):
+        '''Translating buffer coordinates for cursor into display ic coordinates'''
         if self._rotation == 0:
-            self._set_cursor(0, 0)
+            self._set_cursor(0, 0) if not x else self._set_cursor(x, y)
         elif self._rotation == 180:
-            self._set_cursor(self._virtual_width(self.width) - 1, self.height - 1)
+            self._set_cursor(self._virtual_width(self.width) - 1, self.height - 1) if not x else self._set_cursor(self._virtual_width(x) - 1, y - 1)
         elif self._rotation == 90:
-            self._set_cursor(self._virtual_width(self.height) - 1, 0)
+            self._set_cursor(self._virtual_width(self.height) - 1, 0) if not x else self._set_cursor(self._virtual_width(y) - 1, x)
         else:
-            self._set_cursor(0, self.width - 1)
+            self._set_cursor(0, self.width - 1) if not x else self._set_cursor(self._virtual_width(y), x - 1)
 
     def sleep(self):
         self._send(0x10, 0x03)
@@ -478,10 +478,10 @@ class Eink(EinkBase):
         return self._buffer_bw_actual
     
     # @profile
-    def show(self, lut=0):
-        #should set frame here if not set
+    def show(self, x = None, y = None, lut=0):
+        self._set_frame() if not self.wndw_set else None
         self._updt_ctrl_2()
-        super().zero()
+        super().zero(x,y,lut)
 
         self._send_command(0x24)
         self._send_buffer(self._buffer_bw)
@@ -736,7 +736,7 @@ if __name__ == "__main__":
     epd.show()
     epd.fill()
     epd.ellipse(60,60,10,10,f = True)
-    epd.show()
+    epd.show(x=80, y=10)
     epd.rect(50,100,50,10,f=True)
     epd.show()
     epd.partial_mode_off()
