@@ -535,9 +535,6 @@ class EPD2IN9(Eink):
     lightgray = 0b11
 
     def __init__(self, spi=None, *args, **kwargs):
-        
-        self._colours = (0b00, 0b01, 0b10, 0b11) # black, white, darkgray lightgray
-        
         self.long = 296
         self.short = 128
         super().__init__(spi, *args, **kwargs)
