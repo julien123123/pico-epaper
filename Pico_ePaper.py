@@ -172,7 +172,7 @@ class EinkBase:
             self._buffer_bw = self._buffer_bw_actual
             self._bw = self._bw_actual
             self._bw.fill(1)
-            return self._bw
+        return self._bw
     @property
     def red(self):
         if not self._red and not self.monoc:
@@ -242,7 +242,7 @@ class EinkBase:
         pass
     '''
     def _set_full_frame(self, width = None, height = None):
-
+        if self.width and self.height in [self.long, self.short] # if the update does ecompass the entire display
         if self._rotation == 0:
             self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
         elif self._rotation == 180:
@@ -326,9 +326,11 @@ class EinkBase:
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
+            self.bw
             self.part
+            self._buffer_bw = self._buffer_partial
             self._bw = self._part
-            self.part.fill(1)
+            self._part.fill(1)
         else:
             self.bw.fill(1)
         self._partial = True
@@ -484,9 +486,9 @@ class Eink(EinkBase):
         self._send_buffer(self._buffer_bw)
         if self._partial:
             self._ld_part_lut()
-        if not self.monoc and self._part: # only use for shades of grey on full updates
+        else:
             self._send_command(0x26)
-            self._send_buffer(self._buffer_red)
+            self._send_buffer(self._buffer_red) if not self.monoc else self._send_buffer(self._buffer_bw)
             self._ld_norm_lut(lut)
 
         self._send_command(0x20)
@@ -719,7 +721,8 @@ if __name__ == "__main__":
     else:
         p = Pin(2, Pin.OUT) #To restet the epd
         epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False) #Epaper setup (instance of EINK)
+        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+    
     import time
     
     epd.text('hello', 19, 19)
