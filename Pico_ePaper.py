@@ -95,22 +95,23 @@ class EinkBase:
     RAM_RED = const(0b10)
     RAM_RBW = const(0b11)
 
-    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False):
+    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False, monochrome=True):
         if rotation == 0 or rotation == 180:
             self.width = self.short
             self.height = self.long
-            buf_format = framebuf.MONO_HLSB
+            self.buf_format = framebuf.MONO_HLSB
             self._horizontal = False
         elif rotation == 90 or rotation == 270:
             self.width = self.long
             self.height = self.short
-            buf_format = framebuf.MONO_VLSB
+            self.buf_format = framebuf.MONO_VLSB
             self._horizontal = True
         else:
             raise ValueError(
                 f"Incorrect rotation selected ({rotation}). Valid values: 0, 90, 180 and 270.")
 
         self._rotation = rotation
+        self.monoc = monochrome #black and white only flag
 
         if reset_pin is None:
             self._rst = Pin(12, Pin.OUT, value=0)
@@ -136,19 +137,17 @@ class EinkBase:
             self._busy = busy_pin
             self._busy.init(Pin.IN)
 
-        self._buffer_bw_actual = bytearray(self.width * self.height // 8)
-        self._buffer_red = bytearray(self.width * self.height // 8)
-        self._bw_actual = framebuf.FrameBuffer(self._buffer_bw_actual, self.width, self.height, buf_format)
-        self._red = framebuf.FrameBuffer(self._buffer_red, self.width, self.height, buf_format)
+        #setting buffers as None initially to allow for lazy loading
+        self._buffer_bw_actual = None 
+        self._buffer_red = None
+        self._bw_actual = None
+        self._red = None
+        self._buffer_partial = None
+        self._part = None
 
         # Don't start in partial mode.
         self._partial = False
         self._use_partial_buffer = use_partial_buffer
-
-        # Use separate buffer for partial updates only if user wants it, use bw buffer otherwise.
-        if use_partial_buffer:
-            self._buffer_partial = bytearray(self.width * self.height // 8)
-            self._part = framebuf.FrameBuffer(self._buffer_partial, self.width, self.height, buf_format)
 
         # Alias buffer and FrameBuffer to indicate which buffer should be treated as BW RAM buffer.
         self._buffer_bw = self._buffer_bw_actual
@@ -158,10 +157,37 @@ class EinkBase:
         self.wndw_set = False
         self.inited = False # inited flag
 
-        self.fill()
+        #self.fill()
 
         self._init_disp()
         sleep_ms(500)
+    
+    @property #for allowing to lazily load the framebuffers
+    def bw(self):
+        if not self._bw:
+            self._buffer_bw_actual = bytearray(self.width * self.height // 8)
+            self._bw_actual = framebuf.FrameBuffer(self._buffer_bw_actual, self.width, self.height, self.buf_format)
+
+            # Alias buffer and FrameBuffer to indicate which buffer should be treated as BW RAM buffer.
+            self._buffer_bw = self._buffer_bw_actual
+            self._bw = self._bw_actual
+            self._bw.fill(1)
+            return self._bw
+    @property
+    def red(self):
+        if not self._red and not self.monoc:
+            self._buffer_red = bytearray(self.width * self.height // 8)
+            self._red = framebuf.FrameBuffer(self._buffer_red, self.width, self.height, self.buf_format)
+            self._red.fill(1)
+        return self._red
+    
+    @property
+    def part(self):
+        if self._use_partial_buffer and not self._part:
+                self._buffer_partial = bytearray(self.width * self.height // 8)
+                self._part = framebuf.FrameBuffer(self._buffer_partial, self.width, self.height, self.buf_format)
+                self._part.fill(1)
+        return self._part
 
     def _reset(self):
         self._rst(1)
@@ -294,15 +320,17 @@ class EinkBase:
         """Public method for screen reinitialisation."""
         self._init_disp()
 
-    def partial_mode_on(self):
+    def partial_mode_on(self, width= None, height= None):
+        self.width = width if width else self.width
+        self.height = height if height else self.height
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
-            self._buffer_bw = self._buffer_partial
+            self.part
             self._bw = self._part
-            self._part.fill(1)
+            self.part.fill(1)
         else:
-            self._bw.fill(1)
+            self.bw.fill(1)
         self._partial = True
 
     def partial_mode_off(self):
@@ -334,55 +362,55 @@ class EinkBase:
 
     def fill(self, c=None):
         c = self.white if not c else c
-        self._bw.fill(c & 1)
-        if not self._partial:
-            self._red.fill(c >> 1)
+        self.bw.fill(c & 1)
+        if not self._partial and not self.monoc:
+            self.red.fill(c >> 1)
 
     def pixel(self, x, y, c=black):
-        self._bw.pixel(x, y, c & 1)
+        self.bw.pixel(x, y, c & 1)
         if not self._partial:
-            self._red.pixel(x, y, c >> 1)
+            self.red.pixel(x, y, c >> 1)
 
     def hline(self, x, y, w, c=black):
-        self._bw.hline(x, y, w, c & 1)
-        if not self._partial:
-            self._red.hline(x, y, w, c >> 1)
+        self.bw.hline(x, y, w, c & 1)
+        if not self._partial and not self.monoc:
+            self.red.hline(x, y, w, c >> 1)
 
     def vline(self, x, y, h, c=black):
-        self._bw.vline(x, y, h, c & 1)
+        self.bw.vline(x, y, h, c & 1)
         if not self._partial:
-            self._red.vline(x, y, h, c >> 1)
+            self.red.vline(x, y, h, c >> 1)
 
     def line(self, x1, y1, x2, y2, c=black):
-        self._bw.line(x1, y1, x2, y2, c & 1)
-        if not self._partial:
-            self._red.line(x1, y1, x2, y2, c >> 1)
+        self.bw.line(x1, y1, x2, y2, c & 1)
+        if not self._partial and not self.monoc:
+            self.red.line(x1, y1, x2, y2, c >> 1)
 
     def rect(self, x, y, w, h, c=black, f=False):
-        self._bw.rect(x, y, w, h, c & 1, f)
-        if not self._partial:
-            self._red.rect(x, y, w, h, c >> 1, f)
+        self.bw.rect(x, y, w, h, c & 1, f)
+        if not self._partial and not self.monoc:
+            self.red.rect(x, y, w, h, c >> 1, f)
 
     def ellipse(self, x, y, xr, yr, c=black, f=False, m=15):
-        self._bw.ellipse(x, y, xr, yr, c & 1, f, m)
-        if not self._partial:
-            self._red.ellipse(x, y, xr, yr, c >> 1, f, m)
+        self.bw.ellipse(x, y, xr, yr, c & 1, f, m)
+        if not self._partial and not self.monoc:
+            self.red.ellipse(x, y, xr, yr, c >> 1, f, m)
 
     def poly(self, x, y, coords, c=black, f=False):
-        self._bw.poly(x, y, coords, c & 1, f)
-        if not self._partial:
-            self._red.poly(x, y, coords, c >> 1, f)
+        self.bw.poly(x, y, coords, c & 1, f)
+        if not self._partial and not self.monoc:
+            self.red.poly(x, y, coords, c >> 1, f)
 
     def text(self, text, x, y, c=black):
-        self._bw.text(text, x, y, c & 1)
-        if not self._partial:
-            self._red.text(text, x, y, c >> 1)
+        self.bw.text(text, x, y, c & 1)
+        if not self._partial and not self.monoc:
+            self.red.text(text, x, y, c >> 1)
 
     def blit(self, fbuf, x, y, key=-1, palette=None, ram=RAM_RBW):
         if ram & 1 == 1 or self._partial:
-            self._bw.blit(fbuf, x, y, key, palette)
+            self.bw.blit(fbuf, x, y, key, palette)
         if (ram >> 1) & 1 == 1:
-            self._red.blit(fbuf, x, y, key, palette)
+            self.red.blit(fbuf, x, y, key, palette)
 
 
 class Eink(EinkBase):
@@ -456,7 +484,7 @@ class Eink(EinkBase):
         self._send_buffer(self._buffer_bw)
         if self._partial:
             self._ld_part_lut()
-        else:
+        if not self.monoc and self._part: # only use for shades of grey on full updates
             self._send_command(0x26)
             self._send_buffer(self._buffer_red)
             self._ld_norm_lut(lut)
