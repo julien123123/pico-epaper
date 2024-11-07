@@ -157,6 +157,8 @@ class EinkBase:
         # Flag to tell if the window size instruction was sent
         self.wndw_set = False
         self.inited = False # inited flag
+        self.ram_inv = False
+
 
         #self.fill()
 
@@ -166,7 +168,7 @@ class EinkBase:
     @property #for allowing to lazily load the framebuffers
     def bw(self):
         if not self._bw:
-            self._buffer_bw_actual = bytearray(self.width * self.height // 8)
+            self._buffer_bw_actual = bytearray((self.width + 17) * self.height  // 8)
             self._bw_actual = framebuf.FrameBuffer(self._buffer_bw_actual, self.width, self.height, self.buf_format)
 
             # Alias buffer and FrameBuffer to indicate which buffer should be treated as BW RAM buffer.
@@ -177,7 +179,7 @@ class EinkBase:
     @property
     def red(self):
         if not self._red and not self.monoc:
-            self._buffer_red = bytearray(self.width * self.height // 8)
+            self._buffer_red = bytearray((self.width+7) * self.height // 8)
             self._red = framebuf.FrameBuffer(self._buffer_red, self.width, self.height, self.buf_format)
             self._red.fill(1)
         return self._red
@@ -185,7 +187,7 @@ class EinkBase:
     @property
     def part(self):
         if self._use_partial_buffer and not self._part:
-                self._buffer_partial = bytearray(self.width * self.height // 8)
+                self._buffer_partial = bytearray((self.width + 17) * self.height // 8)
                 self._part = framebuf.FrameBuffer(self._buffer_partial, self.width, self.height, self.buf_format)
                 self._part.fill(1)
         return self._part
@@ -242,16 +244,16 @@ class EinkBase:
     def _updt_ctrl_2(self):
         pass
 
-    def _set_frame(self):
+    def _set_frame(self, disp_x = 79): #disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
         '''Translates framebuffer frame size int display ic size'''
         if self._rotation == 0:
-            self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
+            self._set_window(0 + disp_x, self._virtual_width(self.width)+ disp_x - 1, 0, self.height - 1) # disp_x peut être enlevé pour revenir en arière
         elif self._rotation == 180:
-            self._set_window(self._virtual_width(self.width) - 1, 0, self.height - 1, 0)
+            self._set_window(self._virtual_width(self.width) + disp_x - 1, 0 + disp_x, self.height - 1, 0)
         elif self._rotation == 90:
-            self._set_window(self._virtual_width(self.height) - 1, 0, 0, self.width - 1)
+            self._set_window(self._virtual_width(self.height) - 1 + disp_x, 0 + disp_x, 0, self.width - 1)
         elif self._rotation == 270:
-            self._set_window(0, self._virtual_width(self.height) - 1, self.width - 1, 0)
+            self._set_window(0 + disp_x, self._virtual_width(self.height) - 1 + disp_x, self.width - 1, 0)
         else:
             raise ValueError(f"Incorrect rotation selected")
         
@@ -296,19 +298,7 @@ class EinkBase:
         self._send(0x18, 0x80)
 
         self._set_VCOM()
-        '''
-        # Set window.
-        if self._rotation == 0:
-            self._set_window(0, self._virtual_width(self.width) - 1, 0, self.height - 1)
-        elif self._rotation == 180:
-            self._set_window(self._virtual_width(self.width) - 1, 0, self.height - 1, 0)
-        elif self._rotation == 90:
-            self._set_window(self._virtual_width(self.height) - 1, 0, 0, self.width - 1)
-        elif self._rotation == 270:
-            self._set_window(0, self._virtual_width(self.height) - 1, self.width - 1, 0)
-        else:
-            raise ValueError(f"Incorrect rotation selected")
-        '''
+
         self.inited = True
 
     # --------------------------------------------------------
@@ -320,8 +310,9 @@ class EinkBase:
         self._init_disp()
 
     def partial_mode_on(self, width= None, height= None):
-        self.width = width if width else self.width
-        self.height = height if height else self.height
+        self.width = width or self.width
+        self.height = height or self.height
+        print(self.width, ' x ', self.height)
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
@@ -357,6 +348,7 @@ class EinkBase:
         self._send(0x10, 0x03)
         self.inited = False
         self.wndw_set = False
+        self.ram_inv = False
 
     # --------------------------------------------------------
     # Drawing routines (wrappers for FrameBuffer methods).
@@ -477,14 +469,26 @@ class Eink(EinkBase):
     def get_buff(self):
         return self._buffer_bw_actual
     
+    def invert_ram(self,bw=True, red=True):
+        '''invert 1 and 0s in the ram'''
+        b = 0
+        if not self.ram_inv:
+            b += 1 << 3 if bw else 0
+            b += 1 << 7 if red else 0
+            self.ram_inv = True
+        else:
+            self.ram_inv = False
+        self._send(0x21, b)
+    
     # @profile
-    def show(self, x = None, y = None, lut=0):
+    def show(self, x = None, y = None, lut=0, buff= None): #buff = bytearray to send directly
         self._set_frame() if not self.wndw_set else None
         self._updt_ctrl_2()
         super().zero(x,y,lut)
 
         self._send_command(0x24)
-        self._send_buffer(self._buffer_bw)
+        self._send_buffer(self._buffer_bw) if not buff else self._send_buffer(buff)
+        #self.invert_ram()
         if self._partial:
             self._ld_part_lut()
         else:
@@ -494,15 +498,33 @@ class Eink(EinkBase):
 
         self._send_command(0x20)
         self._read_busy()
+        
+    def show_ram(self, lut=0):
+        ''' convinience function for testing '''
+        self._ld_norm_lut(lut)
+        self._send_command(0x20)
+        self._read_busy()
 
-    def eco_show(self):
+    def clear(self): #clear de display
+        self.partial_mode_off() if self._partial else None
+        self._clear_ram()
+        self.show_ram()
+
+    def eco_show(self,w = None, h = None, x = None, y = None, new_buff = None, diff_buff = None): #Work in progress
+        ''' method to allow update after epd sleep or mcu deepsleep
+            by default, it'll make a full frame partial update over the last full update'''
         if self.inited:
             raise Exception('must be used after sleep() method')
         else:
             self.reinit()
-            self.partial_mode_on()
+            self.partial_mode_on() if not w else self.partial_mode_on(w, h)
             # method for automatically toggling buffers after epd.sleep
-            self.show()
+            diff_buff = diff_buff if diff_buff else self._buffer_bw_actual #if differential buffer not specified, will take the last available full buffer
+            self._set_frame() if not self.wndw_set else None
+            self.send_diff_buff(diff_buff)
+
+            self.show() if not x else self.show(x, y)
+            self.partial_mode_off()
             self.sleep()
 
 class EPDPico(Eink):
@@ -727,8 +749,10 @@ if __name__ == "__main__":
     
     import time
     
+    '''   
     epd.text('hello', 19, 19)
     epd.ellipse(200, 200, 90, 90, f=True)
+    #epd.invert_ram()
     epd.show()
     time.sleep(3)
     epd.partial_mode_on()
@@ -741,3 +765,33 @@ if __name__ == "__main__":
     epd.show()
     epd.partial_mode_off()
     epd.sleep()
+    time.sleep(2)
+    epd.part.text('SAPERLIPOPETE', 100, 20) #ne fonctionne pas encore
+    epd.eco_show()
+    '''
+    import numr110V
+    
+    c = numr110V.get_ch('5')
+    epd.partial_mode_on(c[2], c[1])
+    epd._buffer_bw = bytearray(c[0])
+    epd.show(179,0)
+
+
+
+
+
+
+
+'''note to self:
+The y setting is adjustable,, but the image will always be written to the side of the display
+to adjust the x, (i'm talking in 90 rotation), you just have to select the right cursor and have the buffer the right height or width, i'm not sure yet. for 90 rotation, the buffer would have to be vlsb to be directly sent to the display.
+*********** Après tests, curseur contrôle les x et window contrôle les y dans 0 et 180 **************
+
+right seq for direct reversed bits/vertically map font for 90 deg = 00 -for just V, 02 aussi
+'''
+
+
+'''
+Special thanks to this article : https://arthy.org/blog/sleep_epd/ by Michael Rao?
+this article https://bitbanksoftware.blogspot.com/2022/10/using-e-paper-displays-on-resource.html
+'''
