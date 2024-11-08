@@ -793,5 +793,5 @@ right seq for direct reversed bits/vertically map font for 90 deg = 00 -for just
 
 '''
 Special thanks to this article : https://arthy.org/blog/sleep_epd/ by Michael Rao?
-this article https://bitbanksoftware.blogspot.com/2022/10/using-e-paper-displays-on-resource.html
+this article https://bitbanksoftware.blogspot.com/2022/10/using-e-paper-displays-on-resource.html & https://bitbanksoftware.blogspot.com/2024/09/bufferless-e-paper.html from Larrry Bank
 '''

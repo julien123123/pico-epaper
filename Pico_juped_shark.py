@@ -251,7 +251,7 @@ class EinkBase:
         elif self._rotation == 180:
             self._set_window(self._virtual_width(self.width) + disp_x - 1, 0 + disp_x, self.height - 1, 0)
         elif self._rotation == 90:
-            self._set_window(self._virtual_width(self.height) + disp_x-1 , 0 + disp_x, 0 , self.width -1)
+            self._set_window(self._virtual_width(self.height) + disp_x-1 , 0 + disp_x, 0 , self.width )
         elif self._rotation == 270:
             self._set_window(0 + disp_x, self._virtual_width(self.height) - 1 + disp_x, self.width - 1, 0)
         else:
@@ -509,24 +509,26 @@ class Eink(EinkBase):
         self.partial_mode_off() if self._partial else None
         self._clear_ram()
         self.show_ram()
-
-    def quick_buf(self, w, h, x, y, buff, diff=None, invert=True):
-        self.width = w
+        
+    @profile
+    def quick_buf(self, w, h, x, y, buff, diff=None, invert=False):
+        ''' Directly pass a buffer to part update
+            For now Y has to be a multiple of 8
+        '''
+        self.width = w if w <= x or x == 0 else w + x # if x is under the witdth of the buffer, we have to do some hack
         self.height = h
         self.partial_mode_on() if not self._partial else None
         self._set_frame(y) if not self.wndw_set else None
         self._updt_ctrl_2()
         self.zero(x,y+h,0)
         self._send_command(0x24)
-        self._send_buffer(buff)
+        self._send_data(buff)
         if diff:
             self._send_command(0x26)
-            print('ho ho ho')
-            self._send_buffer(diff)
-            self.invert_ram()
+            self._send_data(diff)
+            self.invert_ram() if invert else None
         else:
-            #self.invert_ram()
-            pass
+            self.invert_ram() if invert else None
         self.show_ram(2)
 
     def eco_show(self,w = None, h = None, x = None, y = None, new_buff = None, diff_buff = None): #Work in progress
@@ -653,7 +655,7 @@ if __name__ == "__main__":
         epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
     
 
-    import numr110V
+    import numr110VR
     '''
     c = numr110V.get_ch('5')
     epd.partial_mode_on(c[2], c[1])
@@ -661,9 +663,22 @@ if __name__ == "__main__":
     epd.show(100,10)
     epd.sleep()
     '''
-    d = numr110V.get_ch('4')
+    d = numr110VR.get_ch('4')
     #epd.reinit()
-    epd.quick_buf(d[2], d[1],300, 0, d[0])
+    ff = d[0]
+    dd = bytearray(len(ff))
+    for i, v in enumerate(ff):
+                dd[i] = 0xFF & ~ v
+    epd.quick_buf(d[2], d[1],200, 96, dd)
+    '''
+    epd.partial_mode_off()
+    epd.reinit() # ça marche après reinit
+    epd.text(' nfdfn',10,10) # petit en bas. peut-être que ça a besoin d'être ré-coordoné?
+    #la seq 02 fonctionne!
+    epd.show(300,100)
+    '''
+    
+    
 
 
 
@@ -678,5 +693,5 @@ right seq for direct reversed bits/vertically map font for 90 deg = 00 -for just
 
 '''
 Special thanks to this article : https://arthy.org/blog/sleep_epd/ by Michael Rao?
-this article https://bitbanksoftware.blogspot.com/2022/10/using-e-paper-displays-on-resource.html
+this article https://bitbanksoftware.blogspot.com/2022/10/using-e-paper-displays-on-resource.html & https://bitbanksoftware.blogspot.com/2024/09/bufferless-e-paper.html from Larrry Bank
 '''
