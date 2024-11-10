@@ -309,11 +309,12 @@ class EinkBase:
         """Public method for screen reinitialisation."""
         self._init_disp()
 
-    def partial_mode_on(self, width= None, height= None):
+    def partial_mode_on(self, width= None, height= None, pingpong = True): 
         self.width = width or self.width
         self.height = height or self.height
         print(self.width, ' x ', self.height)
-        self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, 0x4f, 0xff, 0xff, 0xff, 0xff))
+        pp = 0x4f if pingpong else 0xf
+        self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
         if self._use_partial_buffer:
             self.bw
@@ -505,17 +506,28 @@ class Eink(EinkBase):
         self._send_command(0x20)
         self._read_busy()
 
-    def clear(self): #clear de display
+    def clear(self):
+        '''Clears the display'''
         self.partial_mode_off() if self._partial else None
-        self._clear_ram()
-        self.show_ram()
-        
-    @profile
+        self.width = self.long
+        self.height = self.short
+        s = (self.long+7)*self.short//8
+        self._set_frame()
+        self._updt_ctrl_2()
+        self.zero(0, 0, 0)
+        self._send_command(0x24)
+        self._send_data(bytearray([0xff] *s))
+        self._send_command(0x26)
+        self._send_data(bytearray([0xff] *s))
+        self.show_ram(0)
+
+    #@profile
     def quick_buf(self, w, h, x, y, buff, diff=None, invert=False):
         ''' Directly pass a buffer to part update
             For now Y has to be a multiple of 8
+            you can send character by character
         '''
-        self.width = w if w <= x or x == 0 else w + x # if x is under the witdth of the buffer, we have to do some hack
+        self.width = w if w <= x or x == 0 else w + x # if x is under the width of the buffer, we have to do some hack
         self.height = h
         self.partial_mode_on() if not self._partial else None
         self._set_frame(y) if not self.wndw_set else None
@@ -529,10 +541,9 @@ class Eink(EinkBase):
             self.invert_ram() if invert else None
         else:
             self.invert_ram() if invert else None
-        self.show_ram(2)
 
     def eco_show(self,w = None, h = None, x = None, y = None, new_buff = None, diff_buff = None): #Work in progress
-        ''' method to allow update after epd sleep or mcu deepsleep
+        ''' method to allow partial update after epd sleep or mcu deepsleep
             by default, it'll make a full frame partial update over the last full update'''
         if self.inited:
             raise Exception('must be used after sleep() method')
@@ -548,7 +559,7 @@ class Eink(EinkBase):
             self.partial_mode_off()
             self.sleep()
 
-class EPDPico(Eink):
+class EPDPico(Eink): #SSD1677
 
     white =     0b11
     darkgray =  0b01
@@ -568,7 +579,7 @@ class EPDPico(Eink):
     
     def _set_gate_nb(self):
         # Set gate number.
-        self._send(0x01, pack("hB", 479, 0))
+        self._send(0x01, pack("hB", 479, 0)) # 1= mirror
 
     def _set_voltage(self):
         # Set gate voltage.
@@ -604,8 +615,7 @@ class EPDPico(Eink):
     def _ld_part_lut(self):
         self._load_LUT(2)
 
-class EPD2IN9(Eink):
-    
+class EPD2IN9(Eink): #SSD1680
     white =     0b01
     darkgray =  0b10
     lightgray = 0b11
@@ -640,6 +650,22 @@ class EPD2IN9(Eink):
             self._send(0x22, 0xff)
         self._read_busy()
 
+    class EPD4_2(Eink): #SSD1683
+
+        def __init__(self, spi=None, *args, **kwargs):
+            self.long = 400
+            self.short = 300
+            super().__init__(spi, *args, **kwargs)
+
+    class EPD1_54(Eink): #SSD1681
+
+        def __init__(self, spi=None, *args, **kwargs):
+            self.long = 200
+            self.short = 200
+            super().__init__(spi, *args, **kwargs)
+
+
+
 
 if __name__ == "__main__":
     from machine import SPI
@@ -655,7 +681,7 @@ if __name__ == "__main__":
         epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
     
 
-    import numr110VR
+    import numr110VR, temp43VR
     '''
     c = numr110V.get_ch('5')
     epd.partial_mode_on(c[2], c[1])
@@ -663,13 +689,38 @@ if __name__ == "__main__":
     epd.show(100,10)
     epd.sleep()
     '''
-    d = numr110VR.get_ch('4')
+    
+    def direct_text(epd, font, text, w, x, y, invert = True):
+        cur = x
+        for char in text:
+            cc = font.get_ch(char)
+            arr = bytearray(cc[0])
+            if invert:
+                for i, v in enumerate(cc[0]):
+                    arr[i] = 0xFF & ~ v
+            epd.quick_buf(cc[2], cc[1], cur, y, arr)
+            cur += w
+        epd.wndw_set = False #will have to do this better somehow
+    @profile
+    def draw_scr():         
+        direct_text(epd, temp43VR, "12,4°C", 33, 10, 56)
+        direct_text(epd, temp43VR, "54%", 33, 10, 8)
+        direct_text(epd, temp43VR, "1013hPa", 33, 230, 8)
+        direct_text(epd, numr110VR, '12:34', 74, 10, 136)
+    draw_scr()
+        
+    '''
+    d = numr110VR.get_ch('1')
     #epd.reinit()
     ff = d[0]
     dd = bytearray(len(ff))
     for i, v in enumerate(ff):
                 dd[i] = 0xFF & ~ v
-    epd.quick_buf(d[2], d[1],200, 96, dd)
+    epd.quick_buf(d[2], d[1],200, 136, dd)
+
+    epd.quick_buf(d[2], d[1],274, 136, dd)
+    '''
+    epd.show_ram(2) # This is waaaayyyy quicker
     '''
     epd.partial_mode_off()
     epd.reinit() # ça marche après reinit
