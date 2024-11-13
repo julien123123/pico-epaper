@@ -10,6 +10,9 @@ I am currently working on expanding functionalities of the original Pico ePaper 
 - Support for 2.9in epaper display
 - Support for partial update after deepsleep
 - Support for partial update on smaller parts of the display to save on ressources
+- Direct write to the display without having to use FrameBuffer or the Writer class, which is better for lower memory use, for slower mcus. It also uses less energu in the end
+- support for 2 in display buffered screens, also good for slower mcus.
+- support for white partial updates over black
 
 I've made it worked on some of my project, but I figured it would be easyer for me in the future if my modifications are well written in one library.
 
@@ -34,6 +37,7 @@ is a result of additional data processing required before sending buffers to the
 There's also a significant memory overhead associated with the processing.
 Currently, I have no solution to this problem, except using EinkPIO whenever possible.
 
+#not in my version, but I'm not maintaining einkpio... so...
 ---
 
 ## Default pins
