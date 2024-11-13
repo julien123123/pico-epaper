@@ -275,14 +275,14 @@ class EinkBase:
         self._set_voltage()
 
         # Set Data Entry mode.
-        if self._rotation == 0:
+        if self._rotation == 0: #les seq pour direct draw
             seq = 0x03
         elif self._rotation == 180:
-            seq = 0x00
+            seq = 0x01
         elif self._rotation == 90:
             seq = 0x02
         elif self._rotation == 270:
-            seq = 0x05
+            seq = 0x01
         else:
             raise ValueError(f"Incorrect rotation selected")
 
@@ -312,7 +312,6 @@ class EinkBase:
     def partial_mode_on(self, width= None, height= None, pingpong = True): 
         self.width = width or self.width
         self.height = height or self.height
-        print(self.width, ' x ', self.height)
         pp = 0x4f if pingpong else 0xf
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()
@@ -323,7 +322,7 @@ class EinkBase:
             self._bw = self._part
             self._part.fill(1)
         else:
-            self.bw.fill(1)
+            self.bw.fill(1) if self._bw else None
         self._partial = True
 
     def partial_mode_off(self):
@@ -406,6 +405,16 @@ class EinkBase:
             self.bw.blit(fbuf, x, y, key, palette)
         if (ram >> 1) & 1 == 1:
             self.red.blit(fbuf, x, y, key, palette)
+
+
+class Framebuf_mode(EinkBase):
+    def __init__(self):
+        pass
+
+
+class Direct_mode(EinkBase):
+    def __init__(self):
+        pass
 
 class Eink(EinkBase):
 
@@ -678,10 +687,10 @@ if __name__ == "__main__":
     else:
         p = Pin(2, Pin.OUT) #To restet the epd
         epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=True) #Epaper setup (instance of EINK)
+        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False) #Epaper setup (instance of EINK)
     
 
-    import numr110VR, temp43VR
+    import numr110VR, temp43VR, numr110V, numr110
     '''
     c = numr110V.get_ch('5')
     epd.partial_mode_on(c[2], c[1])
@@ -690,7 +699,7 @@ if __name__ == "__main__":
     epd.sleep()
     '''
     
-    def direct_text(epd, font, text, w, x, y, invert = True):
+    def direct_text(epd, font, text, w, x, y, invert = True): # won't create framebuf object if not needed
         cur = x
         for char in text:
             cc = font.get_ch(char)
@@ -703,11 +712,15 @@ if __name__ == "__main__":
         epd.wndw_set = False #will have to do this better somehow
     @profile
     def draw_scr():         
-        direct_text(epd, temp43VR, "12,4°C", 33, 10, 56)
-        direct_text(epd, temp43VR, "54%", 33, 10, 8)
+        direct_text(epd, temp43VR, "26.1°C", 33, 10, 56)
+        direct_text(epd, temp43VR, "6%", 33, 10, 8)
         direct_text(epd, temp43VR, "1013hPa", 33, 230, 8)
-        direct_text(epd, numr110VR, '12:34', 74, 10, 136)
-    draw_scr()
+        direct_text(epd, numr110VR, '23:45', 74, 10, 136)
+    #draw_scr()
+
+    direct_text(epd, numr110VR, 'W4', 74, 100, 80)
+    epd.show_ram(1)
+
         
     '''
     d = numr110VR.get_ch('1')
@@ -720,7 +733,7 @@ if __name__ == "__main__":
 
     epd.quick_buf(d[2], d[1],274, 136, dd)
     '''
-    epd.show_ram(2) # This is waaaayyyy quicker
+    #epd.show_ram(2) # This is waaaayyyy quicker
     '''
     epd.partial_mode_off()
     epd.reinit() # ça marche après reinit
