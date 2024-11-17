@@ -244,10 +244,11 @@ class EinkBase:
     def _updt_ctrl_2(self):
         pass
 
-    def _set_frame(self, disp_x = 0): #disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
+    def _set_frame(self, disp_x = 0):
+        #disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
         '''Translates framebuffer frame size int display ic size'''
         if self._rotation == 0:
-            self._set_window(0 + disp_x, self._virtual_width(self.width)+ disp_x - 1, 0, self.height - 1) # disp_x peut être enlevé pour revenir en arière
+            self._set_window(0 + disp_x, self._virtual_width(self.width)+ disp_x - 1, 0, self.height - 1)
         elif self._rotation == 180:
             self._set_window(self._virtual_width(self.width) + disp_x - 1, 0 + disp_x, self.height - 1, 0)
         elif self._rotation == 90:
@@ -280,7 +281,7 @@ class EinkBase:
         elif self._rotation == 180:
             seq = 0x01
         elif self._rotation == 90:
-            seq = 0x02
+            seq = 0x02 #2
         elif self._rotation == 270:
             seq = 0x01
         else:
@@ -335,6 +336,8 @@ class EinkBase:
 
     def zero(self,x =  None, y = None, lut=0):
         '''Translating buffer coordinates for cursor into display ic coordinates'''
+        # This kind of thing id done a few times. Maybe the if part could be a function by itself
+
         if self._rotation == 0:
             self._set_cursor(0, 0) if not x else self._set_cursor(x, y)
         elif self._rotation == 180:
@@ -413,8 +416,80 @@ class Framebuf_mode(EinkBase):
 
 
 class Direct_mode(EinkBase):
+    
+    # This mode has not transparency, if you need it, use Framebuf_mode, at least for the first full update.
+    
     def __init__(self):
         pass
+
+    def _send_bw(self, buff):
+        self._send_command(0x24)
+        self._send_data(buff)
+
+    def _send_red(self, buff):
+        self._send_command(0x26)
+        self._send_data(buff)
+
+    def _disp_xy(self, x, y):
+        if self._rotation == 0 or 180:
+            return x, y
+        else:
+            return y, x
+    # --------------------------------------------------------
+    # Drawing routines (directly to the display).
+    # --------------------------------------------------------
+    #
+    # bw_ram parameter can be False to use 2 different buffers under monochrome (self.monoc) mode or to send the drawing
+    # to the differential (eraser) buffer under partial update mode.
+    
+    def fill(self, c=None, bw_ram = True):
+        c = self.white if not c else c
+        bbytes = 0xff if c & 1 else 0x00
+        self._send_bw(bytearray([bbytes]* ((self.long+7)*self.short//8))) if bw_ram else None
+        if not self._partial and not self.monoc or not bw_ram:
+            rbytes = 0xff if c >> 1 else 0x00
+            self._send_red(bytearray([bbytes]* ((self.long+7)*self.short//8)))
+
+    def pixel(self, x, y, c=black):
+        pass
+
+    def hline(self, x, y, w, c=black):
+        pass
+
+    def vline(self, x, y, h, c=black):
+        pass
+
+    def line(self, x1, y1, x2, y2, c=black):
+        pass
+
+    def rect(self, x, y, w, h, c=black, f=False):
+        pass
+
+    def ellipse(self, x, y, xr, yr, c=black, f=False, m=15):
+        pass
+
+    def poly(self, x, y, coords, c=black, f=False):
+        pass
+
+    def text(self, text, font, x, y, c=black):
+        # you need to give a font as the display doesn't have one by default
+        # more like a squential img() function
+        pass
+
+    def img(self, buff, x, y):
+        #very similar to buff mode show(x,y)
+        # set frame
+        # set cursor
+        # send buff
+        pass
+
+    # function for setting x y and cursor every time
+
+    def show(self): #previously show_ram
+        self._ld_norm_lut()
+        self._send_command(0x20)
+        self._read_busy()
+
 
 class Eink(EinkBase):
 
@@ -619,7 +694,7 @@ class EPDPico(Eink): #SSD1677
             self._read_busy()
 
     def _ld_norm_lut(self,l):
-        self._load_LUT(l)
+        self._load_LUT(l) if l else self._load_LUT(0) if not self.monoc else self._load_LUT(1)
         
     def _ld_part_lut(self):
         self._load_LUT(2)
@@ -659,38 +734,68 @@ class EPD2IN9(Eink): #SSD1680
             self._send(0x22, 0xff)
         self._read_busy()
 
-    class EPD4_2(Eink): #SSD1683
+class EPD4_2(Eink): #SSD1683
 
-        def __init__(self, spi=None, *args, **kwargs):
-            self.long = 400
-            self.short = 300
-            super().__init__(spi, *args, **kwargs)
+    def __init__(self, spi=None, *args, **kwargs):
+        self.long = 400
+        self.short = 300
+        super().__init__(spi, *args, **kwargs)
 
-    class EPD1_54(Eink): #SSD1681
+class EPD1_54(Eink): #SSD1681
+    x_set = '2B'
+    white =     0b01
+    darkgray =  0b10
+    lightgray = 0b11
+    
+    def __init__(self, spi=None, *args, **kwargs):
+        self.long = 200
+        self.short = 200
+        super().__init__(spi, *args, **kwargs)
 
-        def __init__(self, spi=None, *args, **kwargs):
-            self.long = 200
-            self.short = 200
-            super().__init__(spi, *args, **kwargs)
+    def _clear_ram(self, bw=True, red=True): #0k, modifié la commande pour 0xe5
+        if red:
+            self._send(0x46, 0x55)
+            self._read_busy()
+        if bw:
+            self._send(0x47, 0x55)
+            self._read_busy()
 
+    def _set_gate_nb(self):
+        # Set gate number.
+        self._send(0x01, pack("3B", 0xC7, 0x00, 0x00))
 
+    def _virtual_width(self, num = None):
+        ''' returns width the way it is sent to the chip'''
+        return self.width // 8 if not num else num // 8
 
-
+    def _updt_ctrl_2(self):
+        # Set Display Update Control 2 / loading LUTs
+        if not self._partial:
+            self._send(0x22, 0xf7)
+        else:
+            self._send(0x22, 0xff)
+        self._read_busy()
+        
 if __name__ == "__main__":
     from machine import SPI
     import os
+    device = "1IN54"
     if os.uname().sysname == 'nrf52':
         p = Pin(2, Pin.OUT)
         epdSPI = SPI(2, sck=Pin(45), baudrate=400000, mosi=Pin(47), miso=0)
         epd = EPD2IN9(rotation=90, spi=epdSPI, cs_pin=Pin(3), dc_pin=Pin(29), reset_pin=p, busy_pin=Pin(5), use_partial_buffer=True)
 
-    else:
+    if device == "pico":
         p = Pin(2, Pin.OUT) #To restet the epd
         epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None) #SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(09), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False) #Epaper setup (instance of EINK)
-    
+        epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False) #Epaper setup (instance of EINK)
+    if device == "1IN54":
+        p = Pin(15, Pin.OUT)
+        epdSPI = SPI(2, sck=Pin(12), mosi = Pin(11), miso = None)
+        epd = EPD1_54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
 
-    import numr110VR, temp43VR, numr110V, numr110
+    #import numr110VR
+    import temp43VR #, numr110V, numr110
     '''
     c = numr110V.get_ch('5')
     epd.partial_mode_on(c[2], c[1])
@@ -710,6 +815,7 @@ if __name__ == "__main__":
             epd.quick_buf(cc[2], cc[1], cur, y, arr)
             cur += w
         epd.wndw_set = False #will have to do this better somehow
+    '''
     @profile
     def draw_scr():         
         direct_text(epd, temp43VR, "26.1°C", 33, 10, 56)
@@ -717,9 +823,16 @@ if __name__ == "__main__":
         direct_text(epd, temp43VR, "1013hPa", 33, 230, 8)
         direct_text(epd, numr110VR, '23:45', 74, 10, 136)
     #draw_scr()
-
-    direct_text(epd, numr110VR, 'W4', 74, 100, 80)
+    '''
+    #direct_text(epd, numr110VR, 'W4', 74, 0, 0)
+    #epd.show_ram(1)
+    
+    epd.clear()
+    #epd.sleep()
+    direct_text(epd, temp43VR, '8', 50, 0, 0)
     epd.show_ram(1)
+    #direct_text(epd, numr110VR, '123',74, 0, 0)
+    #epd.show_ram(1)
 
         
     '''
