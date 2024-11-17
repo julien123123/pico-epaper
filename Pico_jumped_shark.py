@@ -734,14 +734,14 @@ class EPD2IN9(Eink): #SSD1680
             self._send(0x22, 0xff)
         self._read_busy()
 
-class EPD4_2(Eink): #SSD1683
+class EPD4IN2(Eink): #SSD1683
 
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 400
         self.short = 300
         super().__init__(spi, *args, **kwargs)
 
-class EPD1_54(Eink): #SSD1681
+class EPD1IN54(Eink): #SSD1681
     x_set = '2B'
     white =     0b01
     darkgray =  0b10
@@ -779,7 +779,7 @@ class EPD1_54(Eink): #SSD1681
 if __name__ == "__main__":
     from machine import SPI
     import os
-    device = "1IN54"
+    device = "2IN9"
     if os.uname().sysname == 'nrf52':
         p = Pin(2, Pin.OUT)
         epdSPI = SPI(2, sck=Pin(45), baudrate=400000, mosi=Pin(47), miso=0)
@@ -792,10 +792,10 @@ if __name__ == "__main__":
     if device == "1IN54":
         p = Pin(15, Pin.OUT)
         epdSPI = SPI(2, sck=Pin(12), mosi = Pin(11), miso = None)
-        epd = EPD1_54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
+        epd = EPD1IN54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
 
-    #import numr110VR
-    import temp43VR #, numr110V, numr110
+    import numr110VR
+    #import temp43VR, numr110V, numr110
     '''
     c = numr110V.get_ch('5')
     epd.partial_mode_on(c[2], c[1])
@@ -829,7 +829,7 @@ if __name__ == "__main__":
     
     epd.clear()
     #epd.sleep()
-    direct_text(epd, temp43VR, '8', 50, 0, 0)
+    direct_text(epd, numr110VR, '8', 50, 0, 0)
     epd.show_ram(1)
     #direct_text(epd, numr110VR, '123',74, 0, 0)
     #epd.show_ram(1)
