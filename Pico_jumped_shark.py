@@ -779,7 +779,7 @@ class EPD1IN54(Eink): #SSD1681
 if __name__ == "__main__":
     from machine import SPI
     import os
-    device = "2IN9"
+    device = "1IN54"
     if os.uname().sysname == 'nrf52':
         p = Pin(2, Pin.OUT)
         epdSPI = SPI(2, sck=Pin(45), baudrate=400000, mosi=Pin(47), miso=0)
@@ -829,7 +829,7 @@ if __name__ == "__main__":
     
     epd.clear()
     #epd.sleep()
-    direct_text(epd, numr110VR, '8', 50, 0, 0)
+    direct_text(epd, numr110VR, '8', 74, 150, 150)
     epd.show_ram(1)
     #direct_text(epd, numr110VR, '123',74, 0, 0)
     #epd.show_ram(1)
