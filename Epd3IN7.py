@@ -75,7 +75,7 @@ class EPDPico(Eink):  # SSD1677
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 480
         self.short = 280
-
+        self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
         self._luts = (EPD_3IN7_lut_4Gray_GC,
                       EPD_3IN7_lut_1Gray_GC,
                       EPD_3IN7_lut_1Gray_DU,

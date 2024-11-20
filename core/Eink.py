@@ -1,4 +1,4 @@
-from EinkBase import EinkBase
+from core.inkBase import EinkBase
 import micropython
 
 class Framebuf_mode(EinkBase):
@@ -8,7 +8,7 @@ class Framebuf_mode(EinkBase):
 
 class Direct_mode(EinkBase):
 
-    # This mode has not transparency, if you need it, use Framebuf_mode, at least for the first full update.
+    # This mode has no transparency, if you need it, use Framebuf_mode, at least for the first full update.
 
     def __init__(self):
         pass
@@ -43,12 +43,16 @@ class Direct_mode(EinkBase):
             self._send_red(bytearray([bbytes] * ((self.long + 7) * self.short // 8)))
 
     def pixel(self, x, y, c=black):
+        # 1 byte, trouver bonne gate de 8 bit
+        # utiliser le << pour tourner le bon pixel
         pass
 
     def hline(self, x, y, w, c=black):
+        # wrapper pour choix fonction ligne dépendament de la rotation dans bytearraydraw
         pass
 
     def vline(self, x, y, h, c=black):
+        # idem
         pass
 
     def line(self, x1, y1, x2, y2, c=black):
@@ -58,6 +62,7 @@ class Direct_mode(EinkBase):
         pass
 
     def ellipse(self, x, y, xr, yr, c=black, f=False, m=15):
+        #in the bytearray draw file
         pass
 
     def poly(self, x, y, coords, c=black, f=False):
@@ -204,7 +209,7 @@ class Eink(EinkBase):
         '''
         self.width = w if w <= x or x == 0 else w + x  # if x is under the width of the buffer, we have to do some hack
         self.height = h
-        self.partial_mode_on() if not self._partial else None
+        #self.partial_mode_on() if not self._partial else None
         self._set_frame(y) if not self.wndw_set else None
         self._updt_ctrl_2()
         self.zero(x, y + h, 0)

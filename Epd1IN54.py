@@ -1,3 +1,7 @@
+# code works for driving te display, but still have the right modes / luts to figure out as images in the bw buffer in the
+# the display shows as light gray (which is what happened the first time I drove all the other displays). Seems like it
+# is using a different formula for the coordinates than all the other displays.
+
 from core.Eink import Eink
 
 class EPD1IN54(Eink):  # SSD1681
@@ -9,6 +13,7 @@ class EPD1IN54(Eink):  # SSD1681
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 200
         self.short = 200
+        self._seqs = (0x03, 0x02, 0x01, 0x01) # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):  # 0k, modifié la commande pour 0xe5

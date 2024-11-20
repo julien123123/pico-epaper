@@ -118,12 +118,6 @@ class EinkBase:
         self._rst(1)
         sleep_ms(30)
 
-    def _send_command(self, command):
-        raise NotImplementedError
-
-    def _send_data(self, data):
-        raise NotImplementedError
-
     def _send(self, command, data):
         self._send_command(command)
         self._send_data(data)
@@ -143,24 +137,6 @@ class EinkBase:
     def _set_window(self, start_x, end_x, start_y, end_y):
         self._send(0x44, pack(self.x_set, start_x, end_x))
         self._send(0x45, pack("2h", start_y, end_y))
-
-    def _clear_ram():
-        raise NotImplementedError
-
-    def _set_gate_nb():
-        raise NotImplementedError
-
-    def _set_voltage(self):
-        pass
-
-    def _set_VCOM(self):
-        pass
-
-    def _virtual_width():
-        raise NotImplementedError
-
-    def _updt_ctrl_2(self):
-        pass
 
     def _set_frame(self, disp_x=0):
         # disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
@@ -195,13 +171,13 @@ class EinkBase:
 
         # Set Data Entry mode.
         if self._rotation == 0:  # les seq pour direct draw
-            seq = 0x03
+            seq = self._seqs[0]
         elif self._rotation == 180:
-            seq = 0x01
+            seq = self._seqs[2]
         elif self._rotation == 90:
-            seq = 0x02  # 2
+            seq = self._seqs[1]
         elif self._rotation == 270:
-            seq = 0x01
+            seq = self._seqs[3]
         else:
             raise ValueError(f"Incorrect rotation selected")
 
@@ -219,6 +195,33 @@ class EinkBase:
         self._set_VCOM()
 
         self.inited = True
+
+    # --------------------------------------------------------
+    # Dummy Methods that get overridden by child classes
+    # --------------------------------------------------------
+    def _send_command(self, command):
+        raise NotImplementedError
+
+    def _send_data(self, data):
+        raise NotImplementedError
+
+    def _clear_ram():
+        raise NotImplementedError
+
+    def _set_gate_nb():
+        raise NotImplementedError
+
+    def _set_voltage(self):
+        pass
+
+    def _set_VCOM(self):
+        pass
+
+    def _virtual_width():
+        raise NotImplementedError
+
+    def _updt_ctrl_2(self):
+        pass
 
     # --------------------------------------------------------
     # Public methods.

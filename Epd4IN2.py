@@ -13,6 +13,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 300
         self.short = 400
+        self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):
