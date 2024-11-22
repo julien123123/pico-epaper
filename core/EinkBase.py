@@ -19,12 +19,12 @@ class EinkBase:
             self.width = self.short
             self.height = self.long
             self.buf_format = framebuf.MONO_HLSB
-            self._horizontal = False
+            self._sqr = False
         elif rotation == 90 or rotation == 270:
             self.width = self.long
             self.height = self.short
             self.buf_format = framebuf.MONO_VLSB
-            self._horizontal = True
+            self._sqr = True #srq = square rotations
         else:
             raise ValueError(
                 f"Incorrect rotation selected ({rotation}). Valid values: 0, 90, 180 and 270.")
@@ -85,7 +85,8 @@ class EinkBase:
     @property  # for allowing to lazily load the framebuffers
     def bw(self):
         if not self._bw:
-            self._buffer_bw_actual = bytearray((self.width + 17) * self.height // 8)
+            pad = 0 if self.width in (self.long, self.short) else 17
+            self._buffer_bw_actual = bytearray((self.width + pad) * self.height // 8)
             self._bw_actual = framebuf.FrameBuffer(self._buffer_bw_actual, self.width, self.height, self.buf_format)
 
             # Alias buffer and FrameBuffer to indicate which buffer should be treated as BW RAM buffer.
@@ -97,7 +98,8 @@ class EinkBase:
     @property
     def red(self):
         if not self._red and not self.monoc:
-            self._buffer_red = bytearray((self.width + 7) * self.height // 8)
+            pad = 0 if self.width in (self.long, self.short) else 7
+            self._buffer_red = bytearray((self.width + pad) * self.height // 8)
             self._red = framebuf.FrameBuffer(self._buffer_red, self.width, self.height, self.buf_format)
             self._red.fill(1)
         return self._red
@@ -105,7 +107,8 @@ class EinkBase:
     @property
     def part(self):
         if self._use_partial_buffer and not self._part:
-            self._buffer_partial = bytearray((self.width + 17) * self.height // 8)
+            pad = 0 if self.width in (self.long, self.short) else 17
+            self._buffer_partial = bytearray((self.width + pad) * self.height // 8)
             self._part = framebuf.FrameBuffer(self._buffer_partial, self.width, self.height, self.buf_format)
             self._part.fill(1)
         return self._part
@@ -257,7 +260,7 @@ class EinkBase:
 
     def zero(self, x=None, y=None, lut=0):
         '''Translating buffer coordinates for cursor into display ic coordinates'''
-        # This kind of thing id done a few times. Maybe the if part could be a function by itself
+        # This kind of thing is done a few times. Maybe the if part could be a function by itself
 
         if self._rotation == 0:
             self._set_cursor(0, 0) if not x else self._set_cursor(x, y)

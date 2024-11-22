@@ -1,8 +1,7 @@
 from core.Eink import Eink
 from ustruct import pack
 
-# All modes work, but weirdly, need more refinement. seq probably not right for direct mode, but ok for framebuf
-# in framebuf mode, there's a ~ 10 points high black band
+#Works!, but for quick update, red buffer gets inverted somehow
 
 class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     x_set = '2B'
@@ -27,6 +26,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def _set_gate_nb(self):
         # Set gate number.
         self._send(0x01, pack("hB", 299, 0x00)) #if second byte is 0x1 = mirror
+        #self._send(0x21, 0x40)
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
@@ -37,7 +37,8 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
         if not self._partial:
             self._send(0x22, 0xf7) #if not self.monoc else self._send(0x22, 0xcf)
         else:
-            self._send(0x22, 0xff)
+            self._send(0x1A, 0x6E)
+            self._send(0x22, 0xfc)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
@@ -59,8 +60,16 @@ if __name__ == "__main__":
             cur += w
         epd.wndw_set = False #will have to do this better somehow
         
-    #direct_text(epd, numr110H, '8', 74, 0, 0)
+    #direct_text(epd, numr110H, '3', 73, 8, 8)
     #epd.show_ram()
 
+    epd.text('mimimimimi', 200, 200)
+    epd.show()
+    epd.partial_mode_on()
+    epd.text('lalalala', 100, 30)
+    epd.show()
+    epd.show_ram()
+    epd.partial_mode_off()
     
-
+    epd.sleep()
+ 
