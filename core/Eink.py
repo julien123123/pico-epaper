@@ -1,92 +1,5 @@
-from core.inkBase import EinkBase
+from core.EinkBase import EinkBase
 import micropython
-
-class Framebuf_mode(EinkBase):
-    def __init__(self):
-        pass
-
-
-class Direct_mode(EinkBase):
-
-    # This mode has no transparency, if you need it, use Framebuf_mode, at least for the first full update.
-
-    def __init__(self):
-        pass
-
-    def _send_bw(self, buff):
-        self._send_command(0x24)
-        self._send_data(buff)
-
-    def _send_red(self, buff):
-        self._send_command(0x26)
-        self._send_data(buff)
-
-    def _disp_xy(self, x, y):
-        if self._rotation == 0 or 180:
-            return x, y
-        else:
-            return y, x
-
-    # --------------------------------------------------------
-    # Drawing routines (directly to the display).
-    # --------------------------------------------------------
-    #
-    # bw_ram parameter can be False to use 2 different buffers under monochrome (self.monoc) mode or to send the drawing
-    # to the differential (eraser) buffer under partial update mode.
-
-    def fill(self, c=None, bw_ram=True):
-        c = self.white if not c else c
-        bbytes = 0xff if c & 1 else 0x00
-        self._send_bw(bytearray([bbytes] * ((self.long + 7) * self.short // 8))) if bw_ram else None
-        if not self._partial and not self.monoc or not bw_ram:
-            rbytes = 0xff if c >> 1 else 0x00
-            self._send_red(bytearray([bbytes] * ((self.long + 7) * self.short // 8)))
-
-    def pixel(self, x, y, c=black):
-        # 1 byte, trouver bonne gate de 8 bit
-        # utiliser le << pour tourner le bon pixel
-        pass
-
-    def hline(self, x, y, w, c=black):
-        # wrapper pour choix fonction ligne dépendament de la rotation dans bytearraydraw
-        pass
-
-    def vline(self, x, y, h, c=black):
-        # idem
-        pass
-
-    def line(self, x1, y1, x2, y2, c=black):
-        pass
-
-    def rect(self, x, y, w, h, c=black, f=False):
-        pass
-
-    def ellipse(self, x, y, xr, yr, c=black, f=False, m=15):
-        #in the bytearray draw file
-        pass
-
-    def poly(self, x, y, coords, c=black, f=False):
-        pass
-
-    def text(self, text, font, x, y, c=black):
-        # you need to give a font as the display doesn't have one by default
-        # more like a squential img() function
-        pass
-
-    def img(self, buff, x, y):
-        # very similar to buff mode show(x,y)
-        # set frame
-        # set cursor
-        # send buff
-        pass
-
-    # function for setting x y and cursor every time
-
-    def show(self):  # previously show_ram
-        self._ld_norm_lut()
-        self._send_command(0x20)
-        self._read_busy()
-
 
 class Eink(EinkBase):
     from machine import SPI
@@ -128,7 +41,7 @@ class Eink(EinkBase):
         return result
 
     def _send_buffer(self, buffer):
-        if self._horizontal:
+        if self._sqr:
             self._send_data(bytes(map(self._reverse_bits, buffer)))
         else:
             self._send_data(buffer)
@@ -189,8 +102,7 @@ class Eink(EinkBase):
     def clear(self):
         '''Clears the display'''
         self.partial_mode_off() if self._partial else None
-        self.width = self.long
-        self.height = self.short
+        self.width, self.height = (self.long, self.short) if self._sqr else (self.short, self.long)
         s = (self.long + 7) * self.short // 8
         self._set_frame()
         self._updt_ctrl_2()
