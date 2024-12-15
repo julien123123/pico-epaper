@@ -106,10 +106,10 @@ class Direct_mode(EinkBase):
     def fill(self, c=None, bw_ram=True):
         c = self.white if not c else c
         bbytes = 0xff if c & 1 else 0x00
-        self._send_bw(bytearray([bbytes] * ((self.long + 7) * self.short // 8))) if bw_ram else None
+        self._send_bw(bytearray([bbytes] * ((self.sqr_side + 7) * self.ic_side // 8))) if bw_ram else None
         if not self._partial and not self.monoc or not bw_ram:
             rbytes = 0xff if c >> 1 else 0x00
-            self._send_red(bytearray([bbytes] * ((self.long + 7) * self.short // 8)))
+            self._send_red(bytearray([bbytes] * ((self.sqr_side + 7) * self.ic_side // 8)))
 
     def pixel(self, x, y, c=black):
         # 1 byte, trouver bonne gate de 8 bit
@@ -120,8 +120,6 @@ class Direct_mode(EinkBase):
             d = draw.pxl(x, y, False)
             d = d ^ 0xff if c & 1 else d
             self_send_bw(d)
-            
-
         else:
             d = draw.pxl(x, y, True)
 

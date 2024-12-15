@@ -12,9 +12,9 @@ class EPD1IN54(Eink):  # SSD1681
     lightgray = 0b11
 
     def __init__(self, spi=None, *args, **kwargs):
-        self.long = 200
-        self.short = 200
-        self._seqs = (0x03, 0x06, 0x01, 0x01) # structure ( 0°, 90°, 180°, 270°)
+        self.sqr_side = 200
+        self.ic_side = 200
+        self._seqs = (0x03, 0x06, 0x00, 0x05) # structure ( 0°, 90°, 180°, 270°) framebuf mode good vals (3, 6, 0, 5)
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):  # 0k, modifié la commande pour 0xe5
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     from machine import Pin, SPI
     p = Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
-    epd = EPD1IN54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
+    epd = EPD1IN54(rotation=270, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
     epd.text('heller', 0, 0)
     epd.show()
     

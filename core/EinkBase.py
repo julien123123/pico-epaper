@@ -15,14 +15,14 @@ class EinkBase:
 
     def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False,
                  monochrome=True):
-        if rotation == 0 or rotation == 180:
-            self.width = self.short
-            self.height = self.long
+        if rotation == 0 or rotation == 180: #this should now go in frambuf mode... not so usefull here
+            self.width = self.ic_side
+            self.height = self.sqr_side
             self.buf_format = framebuf.MONO_HLSB
             self._sqr = False
         elif rotation == 90 or rotation == 270:
-            self.width = self.long
-            self.height = self.short
+            self.width = self.sqr_side
+            self.height = self.ic_side
             self.buf_format = framebuf.MONO_VLSB
             self._sqr = True #srq = square rotations
         else:
@@ -31,6 +31,7 @@ class EinkBase:
 
         self._rotation = rotation
         self.monoc = monochrome  # black and white only flag
+        self.cur_seq = self._seqs[int(rotation/90)]
 
         if reset_pin is None:
             self._rst = Pin(12, Pin.OUT, value=0)
@@ -85,7 +86,7 @@ class EinkBase:
     @property  # for allowing to lazily load the framebuffers
     def bw(self):
         if not self._bw:
-            pad = 0 if self.width in (self.long, self.short) else 17
+            pad = 0 if self.width in (self.sqr_side, self.ic_side) else 17
             self._buffer_bw_actual = bytearray((self.width + pad) * self.height // 8)
             self._bw_actual = framebuf.FrameBuffer(self._buffer_bw_actual, self.width, self.height, self.buf_format)
 
@@ -98,7 +99,7 @@ class EinkBase:
     @property
     def red(self):
         if not self._red and not self.monoc:
-            pad = 0 if self.width in (self.long, self.short) else 7
+            pad = 0 if self.width in (self.sqr_side, self.ic_side) else 7
             self._buffer_red = bytearray((self.width + pad) * self.height // 8)
             self._red = framebuf.FrameBuffer(self._buffer_red, self.width, self.height, self.buf_format)
             self._red.fill(1)
@@ -107,7 +108,7 @@ class EinkBase:
     @property
     def part(self):
         if self._use_partial_buffer and not self._part:
-            pad = 0 if self.width in (self.long, self.short) else 17
+            pad = 0 if self.width in (self.sqr_side, self.ic_side) else 17
             self._buffer_partial = bytearray((self.width + pad) * self.height // 8)
             self._part = framebuf.FrameBuffer(self._buffer_partial, self.width, self.height, self.buf_format)
             self._part.fill(1)
@@ -142,18 +143,22 @@ class EinkBase:
         self._send(0x45, pack("2h", start_y, end_y))
 
     def _set_frame(self, disp_x=0):
-        # disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
-        '''Translates framebuffer frame size int display ic size'''
-        if self._rotation == 0:
-            self._set_window(0 + disp_x, self._virtual_width(self.width) + disp_x - 1, 0, self.height - 1)
-        elif self._rotation == 180:
-            self._set_window(self._virtual_width(self.width) + disp_x - 1, 0 + disp_x, self.height - 1, 0)
-        elif self._rotation == 90:
-            self._set_window(self._virtual_width(self.height) + disp_x - 1, 0 + disp_x, 0, self.width)
-        elif self._rotation == 270:
-            self._set_window(0 + disp_x, self._virtual_width(self.height) - 1 + disp_x, self.width - 1, 0)
+        '''
+        sets the window according to the origin point of the display mode; uses absolute display ram addresses
+        :param disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
+        left most bit (horrizontal/vertical) is ignored
+        '''
+        x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
+        if self.cur_seq & 0b11 == 0: #bottom left
+            self._set_window(self._virtual_width(x) + disp_x - 1, 0 + disp_x, y-1, 0)
+        elif self.cur_seq & 0b11 == 1: #bottom right
+            self._set_window(0 + disp_x, self._virtual_width(x) + disp_x - 1, y-1, 0)
+        elif self.cur_seq & 0b11 == 2: #top right
+            self._set_window(self._virtual_width(x) + disp_x -1, 0 + disp_x, 0, y - 1)
+        elif self.cur_seq & 0b11 == 3: #top left
+            self._set_window(0 + disp_x, self._virtual_width(x) +disp_x - 1, 0, y - 1 )
         else:
-            raise ValueError(f"Incorrect rotation selected")
+            raise ValueError(f'Incorrect rotation or display mode selected')
 
         self.wndw_set = True
 
@@ -173,18 +178,7 @@ class EinkBase:
         self._set_voltage()
 
         # Set Data Entry mode.
-        if self._rotation == 0:  # les seq pour direct draw
-            seq = self._seqs[0]
-        elif self._rotation == 180:
-            seq = self._seqs[2]
-        elif self._rotation == 90:
-            seq = self._seqs[1]
-        elif self._rotation == 270:
-            seq = self._seqs[3]
-        else:
-            raise ValueError(f"Incorrect rotation selected")
-
-        self._send(0x11, seq)
+        self._send(0x11, self.cur_seq)
 
         # Set border.
         self._send(0x3c, 0x03)
@@ -258,20 +252,17 @@ class EinkBase:
             self._bw = self._bw_actual
         self._partial = False
 
-    def zero(self, x=None, y=None, lut=0):
-        '''Translating buffer coordinates for cursor into display ic coordinates'''
-        # This kind of thing is done a few times. Maybe the if part could be a function by itself
-
-        if self._rotation == 0:
-            self._set_cursor(0, 0) if not x else self._set_cursor(x, y)
-        elif self._rotation == 180:
-            self._set_cursor(self._virtual_width(self.width) - 1, self.height - 1) if not x else self._set_cursor(
-                self._virtual_width(x) - 1, y - 1)
-        elif self._rotation == 90:
-            self._set_cursor(self._virtual_width(self.height) - 1, 0) if not x else self._set_cursor(
-                self._virtual_width(y) - 1, x)
+    def zero(self, abs_x=None, abs_y=None, lut=0):
+        """Pointing the zero of the buffer in absolute display coordinate"""
+        x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
+        if self.cur_seq & 0b11 == 0:
+            self._set_cursor(self._virtual_width(x)-1, y-1) if not abs_x or abs_y else self._set_cursor(self._virtual_width(x-abs_x)-1, abs_y)
+        elif self.cur_seq & 0b11 == 1:
+            self._set_cursor(0,y-1) if not abs_x or abs_y else self._set_cursor(self._virtual_width(abs_x)-1, y-abs_y-1)
+        elif self.cur_seq & 0b11 == 2:
+            self._set_cursor(self._virtual_width(x)-1, 0) if not abs_x or abs_y else self._set_cursor(self._virtual_width(x-abs_x) -1, abs_y - 1)
         else:
-            self._set_cursor(0, self.width - 1) if not x else self._set_cursor(self._virtual_width(y), x - 1)
+            self._set_cursor(0,0) if not abs_x or abs_y else self._set_cursor(self._virtual_width(abs_x) -1, abs_y - 1)
 
     def sleep(self):
         self._send(0x10, 0x03)

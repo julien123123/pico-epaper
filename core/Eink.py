@@ -102,8 +102,8 @@ class Eink(EinkBase):
     def clear(self):
         '''Clears the display'''
         self.partial_mode_off() if self._partial else None
-        self.width, self.height = (self.long, self.short) if self._sqr else (self.short, self.long)
-        s = (self.long + 7) * self.short // 8
+        self.width, self.height = (self.sqr_side, self.ic_side) if self._sqr else (self.ic_side, self.sqr_side)
+        s = (self.sqr_side + 7) * self.ic_side // 8
         self._set_frame()
         self._updt_ctrl_2()
         self.zero(0, 0, 0)

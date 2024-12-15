@@ -7,8 +7,8 @@ class EPD2IN9(Eink):  # SSD1680
     x_set = '2B'
 
     def __init__(self, spi=None, *args, **kwargs):
-        self.long = 296
-        self.short = 128
+        self.sqr_side = 296
+        self.ic_side = 128
         self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 

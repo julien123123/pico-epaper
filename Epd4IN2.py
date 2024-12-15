@@ -10,9 +10,9 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     lightgray = 0b11
 
     def __init__(self, spi=None, *args, **kwargs):
-        self.long = 300
-        self.short = 400
-        self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
+        self.sqr_side = 300
+        self.ic_side = 400
+        self._seqs = (0x03, 0x04, 0x01, 0x05)  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
-    epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28), use_partial_buffer=False)
+    epd = EPD4IN2(rotation=270, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28), use_partial_buffer=False)
 
     def direct_text(epd, font, text, w, x, y, invert = True): # won't create framebuf object if not needed
         cur = x
