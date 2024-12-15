@@ -3,6 +3,7 @@
 # is using a different formula for the coordinates than all the other displays.
 
 from core.Eink import Eink
+from ustruct import pack
 
 class EPD1IN54(Eink):  # SSD1681
     x_set = '2B'
@@ -13,15 +14,15 @@ class EPD1IN54(Eink):  # SSD1681
     def __init__(self, spi=None, *args, **kwargs):
         self.long = 200
         self.short = 200
-        self._seqs = (0x03, 0x02, 0x01, 0x01) # structure ( 0°, 90°, 180°, 270°)
+        self._seqs = (0x03, 0x06, 0x01, 0x01) # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):  # 0k, modifié la commande pour 0xe5
         if red:
-            self._send(0x46, 0x55)
+            self._send(0x46, 0xe5) #peut être 0x55
             self._read_busy()
         if bw:
-            self._send(0x47, 0x55)
+            self._send(0x47, 0xe5)
             self._read_busy()
 
     def _set_gate_nb(self):
@@ -44,4 +45,7 @@ if __name__ == "__main__":
     from machine import Pin, SPI
     p = Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
-    epd = EPD1IN54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), se_partial_buffer=False)
+    epd = EPD1IN54(rotation=90, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
+    epd.text('heller', 0, 0)
+    epd.show()
+    

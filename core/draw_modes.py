@@ -60,12 +60,26 @@ class Framebuf_mode(EinkBase):
         if (ram >> 1) & 1 == 1:
             self.red.blit(fbuf, x, y, key, palette)
 
+# --------------------------------------------------------
+# Drawing routines (directly to the display).
+# --------------------------------------------------------
+#
+# bw_ram parameter can be False to use 2 different buffers under monochrome (self.monoc) mode or to send the drawing
+# to the differential (eraser) buffer under partial update mode.
+
+# self._sqr = image width square to byte layout of gates of the display
+# not self._sqr = image width aligned with the bytes of the display
+# bytes of the display are usually aligned with the side where the chip is (the mirror rectangle in the white goo)
+
 class Direct_mode(EinkBase):
     #import core.draw as draw
     # This mode has no transparency, if you need it, use Framebuf_mode, at least for the first full update.
     # In desparation you can always do a partial update to create the overlap of shapes
 
     def __init__(self):
+        pass
+
+    def _set_pframe(self, x, y, h, w):
         pass
 
     def _send_bw(self, buff):
@@ -88,13 +102,6 @@ class Direct_mode(EinkBase):
         else:
             return y, x
 
-    # --------------------------------------------------------
-    # Drawing routines (directly to the display).
-    # --------------------------------------------------------
-    #
-    # bw_ram parameter can be False to use 2 different buffers under monochrome (self.monoc) mode or to send the drawing
-    # to the differential (eraser) buffer under partial update mode.
-    
     @micropython.native
     def fill(self, c=None, bw_ram=True):
         c = self.white if not c else c
@@ -107,11 +114,20 @@ class Direct_mode(EinkBase):
     def pixel(self, x, y, c=black):
         # 1 byte, trouver bonne gate de 8 bit
         # utiliser le << pour tourner le bon pixel
-        pass
+        
+        #specify width and height and cursor and stuff
+        if self._sqr:
+            d = draw.pxl(x, y, False)
+            d = d ^ 0xff if c & 1 else d
+            self_send_bw(d)
+            
+
+        else:
+            d = draw.pxl(x, y, True)
 
     def hline(self, x, y, w, c=black):
         if not self._sqr:
-            draw.aligned_l(x, y, w, c)
+            self._send_bw(draw.aligned_l(x, y, w, c)) if #colorsort????
         else:
             draw.sqr_l(x,y,w,c)
 
@@ -141,7 +157,7 @@ class Direct_mode(EinkBase):
 
     def text(self, text, font, x, y, c=black):
         # you need to give a font as the display doesn't have one by default
-        # more like a squential img() function
+        # more like a sequential img() function
         # takes font_to_py fonts
         pass
 
