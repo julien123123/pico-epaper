@@ -225,62 +225,66 @@ def elps(x_radius, y_radius, fill=False, m=0b1111):
 
 class Mulbuff: #mainly for writing fonts
 
-    """Il me resterait à ajouter les éléments pour le spacing et de vérifier le vertical avec le spacing"""
-    def __init__(self, str, x, y, spacing = 2):
+    """vérifier le vertical avec le spacing et ajouter implémentation de fixed width"""
+    def __init__(self, st, font, x, y, hor = False, spacing = 2, fixed_w = False):
         self.width= 0
         self.height = 0
-        self.str = str
+        self.st = st
         self.x = x
         self.y = y
         self.spacing = spacing
+        self.fixed_w = fixed_w
+        self.font = font
+        self.hor = hor
 
-    def assem(self, font, hor = False):
+    def assem(self):
         """
         assemble lines of string
         """
-        shift = self.x%8 if hor else self.y%8
+        shift = self.x%8 if self.hor else self.y%8
         chr_l = []
-        w_l = []
-        for ltr in self.str:
-            gl = font.get_ch(ltr)
+        w_l = bytearray()
+        for ltr in self.st:
+            gl = self.font.get_ch(ltr)
             chr_l.append(self.l_by_l(gl[0], gl[2], gl[1]))
             w_l.append(gl[2])
 
-        if hor:
-            self.height = font.height()
-            self.width = sum(w_l)
+        if self.hor:
+            self.height = self.font.height()
+            self.width = sum(w_l)+(len(w_l)-1)*self.spacing
             for ln in range(self.height):
-                #line = bytearray()
                 args = []
                 for index, elem in enumerate(chr_l):
-                    chunk = next(elem)
-                    char_w = w_l[index]
-                    args.append((chunk, char_w))
-                yield self.linec(*args) if not shift else self.shiftr(self.linec(*args), shift)
-
+                    args.append((next(elem), w_l[index]))
+                yield self.linec(shift, *args)
         else:
             self.height = sum(w_l)
-            self.width = font.height()
+            self.width = self.font.height()
             for ln in range(self.height):
                 line = bytearray()
                 for elem in chr_l:
                     for line in elem:
                         yield bytearray(line) if not shift else self.shiftr(bytearray(line), shift)
 
-    #@micropython.viper
-    def linec(self, *linesw: object)-> object:
+    @micropython.native
+    def linec(self, shift, *linesw: object)-> object:
         cursor = 0
         fl = bytearray() # final line
         for lines in linesw:
             bline, width = lines
-            if cursor%8:
-                bline = self.shiftr(bytearray(bline), int(cursor%8))
             if len(fl):
+                width += self.spacing
+                shbit = ( cursor + self.spacing ) %8
+                shbyte = (cursor%8 + self.spacing)//8
+                if shbit:
+                    bline = self.shiftr(bytearray(bline), int(cursor % 8))
+                fl.extend(bytearray(shbyte)) if shbyte else None
                 merge = fl[-1] | bline[0]
                 fl[-1] = merge
                 fl.extend(bline[1:-1])
             else:
-                fl.extend(bline)
+                width += shift
+                fl.extend(self.shiftr(bline, shift)) if shift else fl.extend(bline)
             cursor += int(width)
         return fl
 
@@ -295,10 +299,9 @@ class Mulbuff: #mainly for writing fonts
         if val <0:
             raise ValueError('Number of bits must be positive')
         if val == 0:
-            return ba #return a copy if no shift
+            return ba
         byteshift = val//8
         bitshift = val % 8
-
         lenba = int(len(ba))
         result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
         carry = 0
@@ -315,7 +318,7 @@ class Mulbuff: #mainly for writing fonts
 
 if __name__ is '__main__':
     import numr110H
-    txt = Mulbuff('3:12', 0, 0)
-    bb = txt.assem(numr110H, True)
+    txt = Mulbuff('64', numr110H, 0, 0, True, 0, False)
+    bb = txt.assem()
     for i in bb:
         print(i)
