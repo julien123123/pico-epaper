@@ -18,7 +18,7 @@ class EPD2IN9(Eink):  # SSD1680
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if not num else num // 8
+        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
     def _clear_ram(self, bw=True, red=True):  # 0k, modifié la commande pour 0xe5
         if red:

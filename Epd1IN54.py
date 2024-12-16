@@ -31,7 +31,7 @@ class EPD1IN54(Eink):  # SSD1681
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if not num else num // 8
+        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
     def _updt_ctrl_2(self):
         # Set Display Update Control 2 / loading LUTs
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     from machine import Pin, SPI
     p = Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
-    epd = EPD1IN54(rotation=270, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
+    epd = EPD1IN54(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
     epd.text('heller', 0, 0)
     epd.show()
     

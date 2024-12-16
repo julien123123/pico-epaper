@@ -12,7 +12,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 300
         self.ic_side = 400
-        self._seqs = (0x03, 0x04, 0x01, 0x05)  # structure ( 0°, 90°, 180°, 270°)
+        self._seqs = (0x03, 0x06, 0x00, 0x05)  # structure ( 0°, 90°, 180°, 270°) 3605 pour framebuf = parfait
         super().__init__(spi, *args, **kwargs)
 
     def _clear_ram(self, bw=True, red=True):
@@ -30,7 +30,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if not num else num // 8
+        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
     def _updt_ctrl_2(self):
         # Set Display Update Control 2 / loading LUTs
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
-    epd = EPD4IN2(rotation=270, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28), use_partial_buffer=False)
+    epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28), use_partial_buffer=False)
 
     def direct_text(epd, font, text, w, x, y, invert = True): # won't create framebuf object if not needed
         cur = x
@@ -59,17 +59,19 @@ if __name__ == "__main__":
             epd.quick_buf(cc[2], cc[1], cur, y, arr)
             cur += w
         epd.wndw_set = False #will have to do this better somehow
-        
-    #direct_text(epd, numr110H, '8', 73, 8, 8)
-    #epd.show_ram()
-    
+    ''' 
+    epd.partial_mode_on() 
+    direct_text(epd, numr110H, '9', 73, 8, 8)
+    epd.show_ram()
+    '''
     epd.text('mimimimimi', 200, 200)
+    epd.rect(0,0, 10, 10, f= True)
     epd.show()
     epd.partial_mode_on()
     epd.text('lalalala', 100, 30)
     epd.show()
     #epd.show_ram()
-    epd.partial_mode_off()
     
+    epd.partial_mode_off()
     epd.sleep()
  

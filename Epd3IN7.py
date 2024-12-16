@@ -98,7 +98,7 @@ class EPDPico(Eink):  # SSD1677
 
     def _virtual_width(self, num=None):
         ''' returns width the way it shoulf be sent to the chip'''
-        return self.width if not num else num
+        return self.width if num is None else 0 if num is 0 else num
 
     def _updt_ctrl_2(self):
         # Set Display Update Control 2

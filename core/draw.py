@@ -1,4 +1,5 @@
 import utime
+
 def timed_function(f, *args, **kwargs):
     print(f)
     myname = str(f).split(' ')[0]
@@ -221,111 +222,100 @@ def elps(x_radius, y_radius, fill=False, m=0b1111):
         result[byte_index] |= (1 << bit_index)  # Set the bit
 
     return result
-'''
-pense que j'ai trouvé comment
-def imgx():
-    #this is what chat gpt gave me
-    def draw_glyphs_on_line(display_width, glyphs, start_positions, line, get_glyph_row):
-        """
-        Renders glyphs on a single display line and transmits it.
 
-        :param display_width: Width of the display in pixels (e.g., 400).
-        :param glyphs: List of glyph identifiers to render.
-        :param start_positions: List of bit start positions for each glyph.
-        :param line: The specific line of the glyphs to render (0-indexed).
-        :param get_glyph_row: Function to retrieve a memoryview for a glyph's row.
-                              Expected signature: `get_glyph_row(glyph, line)`.
-        """
-        display_line = bytearray(display_width // 8)  # Allocate display buffer for the current line
-
-        for glyph, bit_start in zip(glyphs, start_positions):
-            glyph_row = get_glyph_row(glyph, line)  # Retrieve the memoryview for the glyph's row
-            glyph_width = len(glyph_row) * 8  # Each byte in glyph_row represents 8 pixels
-
-            # Determine where the glyph should start in the display buffer
-            byte_offset = bit_start // 8
-            bit_offset = bit_start % 8
-
-            # Write the glyph row into the display line buffer
-            for i, byte in enumerate(glyph_row):
-                if byte_offset + i < len(display_line):
-                    display_line[byte_offset + i] |= byte >> bit_offset
-                if byte_offset + i + 1 < len(display_line) and bit_offset > 0:
-                    display_line[byte_offset + i + 1] |= (byte << (8 - bit_offset)) & 0xFF
-
-        # Transmit the constructed line to the display
-        transmit_display_line(display_line)
-
-    def transmit_display_line(line_data):
-        """
-        Stub function to represent transmitting a line of data to the display.
-        Replace this with your display driver's implementation.
-        """
-        # Example: Send the line_data over SPI or I2C
-        pass
-'''
 class Mulbuff: #mainly for writing fonts
-    def __init__(self, str, x, y):
+
+    """Il me resterait à ajouter les éléments pour le spacing et de vérifier le vertical avec le spacing"""
+    def __init__(self, str, x, y, spacing = 2):
         self.width= 0
         self.height = 0
         self.str = str
         self.x = x
         self.y = y
+        self.spacing = spacing
 
     def assem(self, font, hor = False):
+        """
+        assemble lines of string
+        """
         shift = self.x%8 if hor else self.y%8
         chr_l = []
-        wi = 0
+        w_l = []
         for ltr in self.str:
             gl = font.get_ch(ltr)
             chr_l.append(self.l_by_l(gl[0], gl[2], gl[1]))
-            wi += gl[2]
+            w_l.append(gl[2])
 
         if hor:
             self.height = font.height()
-            self.width = wi
+            self.width = sum(w_l)
             for ln in range(self.height):
-                line = bytearray()
-                for elem in chr_l:
+                #line = bytearray()
+                args = []
+                for index, elem in enumerate(chr_l):
                     chunk = next(elem)
-                    line.extend(bytearray(chunk))
-                yield line if not shift else self.shiftr(line, shift)
+                    char_w = w_l[index]
+                    args.append((chunk, char_w))
+                yield self.linec(*args) if not shift else self.shiftr(self.linec(*args), shift)
 
         else:
-            self.height = wi
+            self.height = sum(w_l)
             self.width = font.height()
-            for ln in range(wi):
+            for ln in range(self.height):
                 line = bytearray()
                 for elem in chr_l:
                     for line in elem:
                         yield bytearray(line) if not shift else self.shiftr(bytearray(line), shift)
 
+    #@micropython.viper
+    def linec(self, *linesw: object)-> object:
+        cursor = 0
+        fl = bytearray() # final line
+        for lines in linesw:
+            bline, width = lines
+            if cursor%8:
+                bline = self.shiftr(bytearray(bline), int(cursor%8))
+            if len(fl):
+                merge = fl[-1] | bline[0]
+                fl[-1] = merge
+                fl.extend(bline[1:-1])
+            else:
+                fl.extend(bline)
+            cursor += int(width)
+        return fl
+
+    @micropython.native
     def l_by_l(self, buf, w, h):
-        width = w//8
+        width = w//8 if w%8 == 0 else w//8+1
         for i in range(h):
             yield buf[i*width:i*width+width]
 
-    def shiftr(self, ba, val):
+    @micropython.viper
+    def shiftr(self, ba: object, val: int) -> object:
         if val <0:
             raise ValueError('Number of bits must be positive')
         if val == 0:
-            return ba[:] #return a copy if no shift
+            return ba #return a copy if no shift
         byteshift = val//8
         bitshift = val % 8
 
-        result = bytearray(len(ba)+byteshift+ (1 if bitshift > 0 else 0))
+        lenba = int(len(ba))
+        result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
         carry = 0
 
-        for i in range(len(ba)):
-            result[i + byteshift] = (ba[i] >> bitshift) | carry
-            carry = (ba[i] & ((1 << bitshift) -1)) << (8-bitshift)
+        for i in range(lenba):
+            result[i + byteshift] = (int(ba[i]) >> bitshift) | carry
+            carry = (int(ba[i]) & ((1 << bitshift) -1)) << (8-bitshift)
 
-        if carry > 0:
-            result[len(ba)+byteshift] = carry
+        if int(carry) > 0:
+            result[lenba+byteshift] = carry
 
         return result
 
 
 if __name__ is '__main__':
-   
-    pass
+    import numr110H
+    txt = Mulbuff('3:12', 0, 0)
+    bb = txt.assem(numr110H, True)
+    for i in bb:
+        print(i)

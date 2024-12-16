@@ -146,17 +146,17 @@ class EinkBase:
         '''
         sets the window according to the origin point of the display mode; uses absolute display ram addresses
         :param disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
-        left most bit (horrizontal/vertical) is ignored
+        left most bit (horizontal/vertical) is ignored
         '''
         x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
         if self.cur_seq & 0b11 == 0: #bottom left
-            self._set_window(self._virtual_width(x) + disp_x - 1, 0 + disp_x, y-1, 0)
+            self._set_window(self._virtual_width(x + disp_x) - 1, max(self._virtual_width(disp_x) -1, 0), y-1, 0)
         elif self.cur_seq & 0b11 == 1: #bottom right
-            self._set_window(0 + disp_x, self._virtual_width(x) + disp_x - 1, y-1, 0)
+            self._set_window(0 + self._virtual_width(disp_x), self._virtual_width(x+disp_x)- 1, y-1, 0)
         elif self.cur_seq & 0b11 == 2: #top right
-            self._set_window(self._virtual_width(x) + disp_x -1, 0 + disp_x, 0, y - 1)
+            self._set_window(self._virtual_width(x+disp_x)- 1, self._virtual_width(disp_x), 0, y - 1)
         elif self.cur_seq & 0b11 == 3: #top left
-            self._set_window(0 + disp_x, self._virtual_width(x) +disp_x - 1, 0, y - 1 )
+            self._set_window(0 + self._virtual_width(disp_x), self._virtual_width(x+disp_x) - 1, 0, y - 1 )
         else:
             raise ValueError(f'Incorrect rotation or display mode selected')
 
@@ -192,6 +192,25 @@ class EinkBase:
         self._set_VCOM()
 
         self.inited = True
+
+        def _abs_xy(self, rel_x, rel_y):
+            """:returns absolute display coordinates"""
+            x, y = (rel_y, rel_x) if (self.cur_seq >> 2) & 1 else (rel_x, rel_y)
+            seq = self.cur_seq & 0b11
+            abs_x, abs_y = 0,0
+            if not seq:
+                abs_x = self.ic_side - x
+                abs_y = self.sqr_side - y
+            elif seq == 1:
+                abs_x = x
+                abs_y = self.sqr_side - y
+            elif seq == 2:
+                abs_x = self.ic_side - x
+                abs_y = y
+            else: #seq == 3
+                abs_x = x
+                abs_y = y
+            return abs_x, abs_y
 
     # --------------------------------------------------------
     # Dummy Methods that get overridden by child classes
@@ -252,17 +271,17 @@ class EinkBase:
             self._bw = self._bw_actual
         self._partial = False
 
-    def zero(self, abs_x=None, abs_y=None, lut=0):
+    def zero(self, abs_x=0, abs_y=0, lut=0):
         """Pointing the zero of the buffer in absolute display coordinate"""
         x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
-        if self.cur_seq & 0b11 == 0:
-            self._set_cursor(self._virtual_width(x)-1, y-1) if not abs_x or abs_y else self._set_cursor(self._virtual_width(x-abs_x)-1, abs_y)
-        elif self.cur_seq & 0b11 == 1:
-            self._set_cursor(0,y-1) if not abs_x or abs_y else self._set_cursor(self._virtual_width(abs_x)-1, y-abs_y-1)
-        elif self.cur_seq & 0b11 == 2:
-            self._set_cursor(self._virtual_width(x)-1, 0) if not abs_x or abs_y else self._set_cursor(self._virtual_width(x-abs_x) -1, abs_y - 1)
-        else:
-            self._set_cursor(0,0) if not abs_x or abs_y else self._set_cursor(self._virtual_width(abs_x) -1, abs_y - 1)
+        if self.cur_seq & 0b11 == 0: #bottom right
+            self._set_cursor(self._virtual_width(x)-1, y-1) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(x-abs_x)-1, y - abs_y -1)
+        elif self.cur_seq & 0b11 == 1: #bottom left
+            self._set_cursor(0,y-1) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(abs_x)-1, y-abs_y-1)
+        elif self.cur_seq & 0b11 == 2: #top right
+            self._set_cursor(self._virtual_width(x)-1, 0) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(x-abs_x) -1, abs_y - 1)
+        else: # Top left
+            self._set_cursor(0,0) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(abs_x) -1, abs_y - 1)
 
     def sleep(self):
         self._send(0x10, 0x03)
