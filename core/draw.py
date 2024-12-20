@@ -1,5 +1,6 @@
 import utime
 
+
 def timed_function(f, *args, **kwargs):
     print(f)
     myname = str(f).split(' ')[0]
@@ -10,6 +11,24 @@ def timed_function(f, *args, **kwargs):
         print('Function {} Time = {:6.3f}ms'.format(myname, delta/1000))
         return result
     return new_func
+
+class Drawable: # Parce que ça serait peut-être plus facile comme ça si tout les dessins font partie d'une classe
+    def __init__(self, x, y, horr):
+        self.x = x
+        self.y = y
+        self.horr = horr
+
+    @property
+    def width(self):
+        raise NotImplementedError
+    @property
+    def height(self):
+        raise NotImplementedError
+
+    def setup(self):
+        raise NotImplementedError
+
+
 def pxl(x, y, horr):
     sh = x%8 if horr else y%8
     return 0xff ^ (1 << sh)
@@ -57,6 +76,7 @@ def sqr_l(x: int, y:int, h:int, c:int) -> object:
 
 def ab_l(x1, y1, x2, y2):
     #Bresenham's line algorithm
+
     pass
 
 def rect(x, y, w, h, c, fill=True):
@@ -223,68 +243,90 @@ def elps(x_radius, y_radius, fill=False, m=0b1111):
 
     return result
 
-class Mulbuff: #mainly for writing fonts
 
-    """vérifier le vertical avec le spacing et ajouter implémentation de fixed width"""
+class ChainBuff: #mainly for writing fonts
+
+    """ajouter implémentation de fixed width pour vertical"""
     def __init__(self, st, font, x, y, hor = False, spacing = 2, fixed_w = False):
-        self.width= 0
-        self.height = 0
         self.st = st
         self.x = x
         self.y = y
         self.spacing = spacing
-        self.fixed_w = fixed_w
+        self.fixed_w = fixed_w if fixed_w != 'max' else font.max_width()
         self.font = font
         self.hor = hor
+        self.chr_l = []
+        self.w_l = bytearray()
+        self.shift = self.x%8 if self.hor else self.y%8
+        
+        if self.fixed_w and self.fixed_w < self.font.max_width():
+            raise ValueError(f"fixed_width should be equal to or greater than the font's max_width, use 'max' to use that value instead")
+
+        self.setup()
+
+    @property
+    def width(self):
+        return sum(self.w_l)+(len(self.w_l)-1)*self.spacing if self.hor else self.font.height()
+
+    @property
+    def height(self):
+        return self.font.height() if self.hor else sum(self.w_l)+(self.spacing*(len(self.st)-1)) #or fixed width*len(self.st)
+
+    def setup(self):
+        for ltr in self.st:
+            gl = self.font.get_ch(ltr)
+            self.chr_l.append(self.l_by_l(gl[0], gl[2], gl[1])) if self.hor else self.chr_l.append(
+                self.l_by_l(gl[0], gl[1], gl[2]))
+            self.w_l.append(gl[2])
 
     def assem(self):
         """
         assemble lines of string
         """
-        shift = self.x%8 if self.hor else self.y%8
-        chr_l = []
-        w_l = bytearray()
-        for ltr in self.st:
-            gl = self.font.get_ch(ltr)
-            chr_l.append(self.l_by_l(gl[0], gl[2], gl[1]))
-            w_l.append(gl[2])
-
-        if self.hor:
-            self.height = self.font.height()
-            self.width = sum(w_l)+(len(w_l)-1)*self.spacing
+        if self.hor: #HORRIZONTAL
             for ln in range(self.height):
                 args = []
-                for index, elem in enumerate(chr_l):
-                    args.append((next(elem), w_l[index]))
-                yield self.linec(shift, *args)
-        else:
-            self.height = sum(w_l)
-            self.width = self.font.height()
-            for ln in range(self.height):
-                line = bytearray()
-                for elem in chr_l:
-                    for line in elem:
-                        yield bytearray(line) if not shift else self.shiftr(bytearray(line), shift)
+                for index, elem in enumerate(self.chr_l):
+                    args.append(next(elem))
+                yield self.linec(self.shift, *args)
+
+        else: #VERTICAL
+            b_width = self.width//8 + bool(self.width%8)
+
+            for e, elem in enumerate(self.chr_l):
+                delta = self.fixed_w - self.w_l[e] if self.fixed_w else 0
+                for line in elem:
+                    yield bytearray(line) if not self.shift else self.shiftr(bytearray(line), self.shift)
+
+                if bool(self.spacing+delta) & bool(e < len(self.chr_l) - 1):
+                    for _ in range(self.spacing+delta): #plus delta
+                        yield bytearray(b_width)
+
 
     @micropython.native
     def linec(self, shift, *linesw: object)-> object:
         cursor = 0
         fl = bytearray() # final line
-        for lines in linesw:
-            bline, width = lines
+        for ndx,lines in enumerate(linesw):
+            width = self.w_l[ndx]
             if len(fl):
-                width += self.spacing
-                shbit = ( cursor + self.spacing ) %8
-                shbyte = (cursor%8 + self.spacing)//8
-                if shbit:
-                    bline = self.shiftr(bytearray(bline), int(cursor % 8))
+                delta_fw = self.fixed_w - self.w_l[ndx] if self.fixed_w else 0
+                ttl_spc = delta_fw + self.spacing
+                width += ttl_spc
+                shbit = ( cursor + ttl_spc ) %8
+                shbyte = (cursor%8 + ttl_spc)//8
                 fl.extend(bytearray(shbyte)) if shbyte else None
-                merge = fl[-1] | bline[0]
-                fl[-1] = merge
-                fl.extend(bline[1:-1])
+
+                if shbit:
+                    lines = self.shiftr(bytearray(lines), int(cursor % 8))
+                    merge = fl[-1] | lines[0]
+                    fl[-1] = merge
+                    fl.extend(lines[1:-1])
+                else:
+                    fl.extend(lines)
             else:
                 width += shift
-                fl.extend(self.shiftr(bline, shift)) if shift else fl.extend(bline)
+                fl.extend(self.shiftr(lines, shift)) if shift else fl.extend(lines)
             cursor += int(width)
         return fl
 
@@ -305,20 +347,17 @@ class Mulbuff: #mainly for writing fonts
         lenba = int(len(ba))
         result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
         carry = 0
-
         for i in range(lenba):
             result[i + byteshift] = (int(ba[i]) >> bitshift) | carry
             carry = (int(ba[i]) & ((1 << bitshift) -1)) << (8-bitshift)
-
         if int(carry) > 0:
             result[lenba+byteshift] = carry
 
         return result
 
-
 if __name__ is '__main__':
-    import numr110H
-    txt = Mulbuff('64', numr110H, 0, 0, True, 0, False)
+    import numr110H, numr110V
+    txt = ChainBuff('46', numr110V, 3, 4, False, 0, False)
     bb = txt.assem()
     for i in bb:
         print(i)

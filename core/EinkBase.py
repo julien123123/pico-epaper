@@ -15,12 +15,12 @@ class EinkBase:
 
     def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False,
                  monochrome=True):
-        if rotation == 0 or rotation == 180: #this should now go in frambuf mode... not so usefull here
+        if rotation in (0,180): #this should now go in frambuf mode... not so usefull here
             self.width = self.ic_side
             self.height = self.sqr_side
             self.buf_format = framebuf.MONO_HLSB
             self._sqr = False
-        elif rotation == 90 or rotation == 270:
+        elif rotation in (90,270):
             self.width = self.sqr_side
             self.height = self.ic_side
             self.buf_format = framebuf.MONO_VLSB
