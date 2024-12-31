@@ -35,11 +35,12 @@ class Drawable:
 
 
 class Pixel(Drawable):
-    def __init__(self, x, y, hor):
+    def __init__(self, x, y, color, hor):
         super().__init__(x, y, hor)
         self.byte = 0
         self.actual_x = self.x - self.x%8 if self.hor else self.x
         self.actual_y = self.y - self.y%8 if not self.hor else self.y
+        self.c = color & 1
         self.setup()
 
     @property
@@ -52,7 +53,7 @@ class Pixel(Drawable):
 
     def setup(self):
         sh = self.x%8 if self.hor else self.y%8
-        self.byte = 0xff ^ (1 << (7-sh))
+        self.byte = 0xff ^ (1 << (7-sh)) if not self.c else 1 << (7-sh)
 
     def draw(self):
         return bytearray([self.byte])
@@ -140,6 +141,7 @@ class StrLine(Drawable):
 
 
 class ABLine(Drawable):
+    # Lacks the possibility of drawing lines in different quadrants
     def __init__(self, x1, y1, x2, y2, c, hor):
         super().__init__(x1, y1, hor)
         self.x2 = x2
@@ -174,7 +176,10 @@ class ABLine(Drawable):
         err = dx - dy
         x1, y1 = self.x, self.y
         while True:
-            yield x1 - self.actual_x, y1 - self.actual_y  # Plot the current pixel relative to actual_x and actual_y
+            if self.hor:
+                yield x1 - self.actual_x, y1 - self.actual_y  # Plot the current pixel relative to actual_x and actual_y
+            else:
+                yield y1 - self.actual_y, x1 - self.actual_x
             if x1 == self.x2 and y1 == self.y2:  # Exit when the end point is reached
                 break
             e2 = err * 2
@@ -186,24 +191,26 @@ class ABLine(Drawable):
                 y1 += sy
 
     def draw(self):
-        # Replace with your drawing logic, e.g., framebuffer set_pixel or hardware-specific commands
         points = [p for p in self.bresenham()]
         max_y = max(y for _, y in points)
         grouped_points = [[] for _ in range(max_y + 1)]
         for x, y in points:
             grouped_points[y].append(x)
-
         bkgrd = 0 if self.color == 1 else 0xff
-        byte_width = self.width // 8
+        byte_width = self.width // 8 if self.hor else self.height // 8
         for x_points in grouped_points:
             if x_points:
                 bline = bytearray([bkgrd] * byte_width)
                 for pt in x_points:
-                    bline[pt // 8] |= 1 << (pt % 8)
+                    if self.hor:
+                        bline[pt // 8] |= 1 << (pt % 8)
+                    else:
+                        bline[pt//8] |= 1 << ( 7 - ( pt % 8 ))
                 yield bline
 
 
 class Rect(Drawable):
+    # not working for vertical rectangles yet
     def __init__(self, x, y, height, width, color, hor, f= True):
         super().__init__(x, y, hor)
         self.h = height
@@ -227,9 +234,7 @@ class Rect(Drawable):
     def setup(self):
         pass
 
-    def rect(self):
-        # yields a quare
-        # the function uses parameter tu to return a tuple with aligned coordinates (bytes alligned x, y, actyal bytearray width, height)
+    def draw(self):
         fline = bytearray()
         if self.first:
             a = 0
@@ -247,13 +252,12 @@ class Rect(Drawable):
                 a |= self.c << (8-i)
             fline.append(a)
         mid = self.h-2
-
         yield fline
         if not self.f:
             line = bytearray()
             line.append(self.c << (8-self.first))
             for byte in range(full):
-                line.append(0x00)
+                line.append(0x00) if self.c else line.append(0xff)
             line.append(self.c << self.rem)
 
             if mid:
@@ -263,7 +267,7 @@ class Rect(Drawable):
             for i in range(mid):
                 yield fline
         yield fline
-        yield bytearray([0x00]*((self.w+7)//8+1))
+        #yield bytearray([0x00]*((self.w+7)//8+1)) Je ne sais pas pourquoi j'ai mis ça là
 
 @micropython.viper
 def pixl(x:int,y:int,c:int)->object:
@@ -274,29 +278,25 @@ def pixl(x:int,y:int,c:int)->object:
 
 
 class Ellipse(Drawable):
-    def __init__(self,xradius, yradius, x, y, hor, f = False, m = 0b1111):
+    def __init__(self,xradius, yradius, x, y, color, hor, f = False, m = 0b1111):
         self.xr = xradius
         self.yr = yradius
         self.fill = f
+        self.c =color
         self.m = m
         super().__init__(x, y, hor)
         self.setup()
 
     @property
     def width(self):
-        return 2*self.xr+1
+        return 2*self.xr+1 if self.hor else 2*self.yr+1
 
     @property
     def height(self):
-        return 2*self.yr+1
+        return 2*self.yr+1 if self.hor else 2*self.xr+1
 
     def setup(self):
-        pass
-
-    def create_ellipse(x_radius, y_radius, fill=False, m=0b1111, horizontal=False):
-
-        width = 2 * x_radius + 1
-        height = 2 * y_radius + 1
+        """:returns a list of coordinates"""
 
         def in_quadrant(px, py, quadrant_mask):
             if px >= 0 and py <= 0:  # Q1 (top-right)
@@ -310,33 +310,33 @@ class Ellipse(Drawable):
             return False
 
         # Midpoint Ellipse Algorithm
-        x, y = 0, y_radius
-        x_radius2 = x_radius * x_radius
-        y_radius2 = y_radius * y_radius
+        x, y = 0, self.yr
+        x_radius2 = self.xr * self.xr
+        y_radius2 = self.yr * self.yr
         x_radius2y_radius2 = x_radius2 * y_radius2
         dx = 2 * y_radius2 * x
         dy = 2 * x_radius2 * y
 
         # Region 1
-        d1 = y_radius2 - (x_radius2 * y_radius) + (0.25 * x_radius2)
+        d1 = y_radius2 - (x_radius2 * self.yr) + (0.25 * x_radius2)
         while dx < dy:
-            if fill:
+            if self.fill:
                 # Fill horizontal line between points
                 for px in range(-x, x + 1):
-                    if in_quadrant(px, y, m):
-                        yield (x_radius + px, y_radius - y)
-                    if in_quadrant(px, -y, m):
-                        yield (x_radius + px, y_radius + y)
+                    if in_quadrant(px, y, self.m):
+                        yield self.xr + px, self.yr - y # removed parenthesis
+                    if in_quadrant(px, -y, self.m):
+                        yield self.xr + px, self.yr + y
             else:
                 # Draw boundary points
-                if in_quadrant(x, y, m):
-                    yield (x_radius + x, y_radius - y)
-                if in_quadrant(-x, y, m):
-                    yield (x_radius - x, y_radius - y)
-                if in_quadrant(x, -y, m):
-                    yield (x_radius + x, y_radius + y)
-                if in_quadrant(-x, -y, m):
-                    yield (x_radius - x, y_radius + y)
+                if in_quadrant(x, y, self.m):
+                    yield self.xr + x, self.yr - y
+                if in_quadrant(-x, y, self.m):
+                    yield self.xr - x, self.yr - y
+                if in_quadrant(x, -y, self.m):
+                    yield self.xr + x, self.yr + y
+                if in_quadrant(-x, -y, self.m):
+                    yield self.xr - x, self.yr + y
 
             if d1 < 0:
                 x += 1
@@ -352,23 +352,23 @@ class Ellipse(Drawable):
         # Region 2
         d2 = (y_radius2 * (x + 0.5) * (x + 0.5)) + (x_radius2 * (y - 1) * (y - 1)) - x_radius2y_radius2
         while y >= 0:
-            if fill:
+            if self.fill:
                 # Fill horizontal line between points
                 for px in range(-x, x + 1):
-                    if in_quadrant(px, y, m):
-                        yield (x_radius + px, y_radius - y)
-                    if in_quadrant(px, -y, m):
-                        yield (x_radius + px, y_radius + y)
+                    if in_quadrant(px, y, self.m):
+                        yield self.xr + px, self.yr - y
+                    if in_quadrant(px, -y, self.m):
+                        yield self.xr + px, self.yr + y
             else:
                 # Draw boundary points
-                if in_quadrant(x, y, m):
-                    yield (x_radius + x, y_radius - y)
-                if in_quadrant(-x, y, m):
-                    yield (x_radius - x, y_radius - y)
-                if in_quadrant(x, -y, m):
-                    yield (x_radius + x, y_radius + y)
-                if in_quadrant(-x, -y, m):
-                    yield (x_radius - x, y_radius + y)
+                if in_quadrant(x, y, self.m):
+                    yield self.xr + x, self.yr - y
+                if in_quadrant(-x, y, self.m):
+                    yield self.xr - x, self.yr - y
+                if in_quadrant(x, -y, self.m):
+                    yield self.xr + x, self.yr + y
+                if in_quadrant(-x, -y, self.m):
+                    yield self.xr - x, self.yr + y
 
             if d2 > 0:
                 y -= 1
@@ -381,32 +381,137 @@ class Ellipse(Drawable):
                 dy -= 2 * x_radius2
                 d2 += dx - dy + x_radius2
 
+    def setup2(self):
+        """:returns a list of lists of points where y is the index of the list"""
+        points = [[] for _ in range(2 * self.yr + 1)]
+
+        def in_quadrant(px, py, quadrant_mask):
+            if px >= 0 and py <= 0:  # Q1 (top-right)
+                return quadrant_mask & 0b0001
+            if px <= 0 and py <= 0:  # Q2 (top-left)
+                return quadrant_mask & 0b0010
+            if px <= 0 and py >= 0:  # Q3 (bottom-left)
+                return quadrant_mask & 0b0100
+            if px >= 0 and py >= 0:  # Q4 (bottom-right)
+                return quadrant_mask & 0b1000
+            return False
+
+        # Midpoint Ellipse Algorithm
+        x, y = 0, self.yr
+        x_radius2 = self.xr * self.xr
+        y_radius2 = self.yr * self.yr
+        x_radius2y_radius2 = x_radius2 * y_radius2
+        dx = 2 * y_radius2 * x
+        dy = 2 * x_radius2 * y
+
+        # Region 1
+        d1 = y_radius2 - (x_radius2 * self.yr) + (0.25 * x_radius2)
+        while dx < dy:
+            if self.fill:
+                # Fill horizontal line between points
+                for px in range(-x, x + 1):
+                    if in_quadrant(px, y, self.m):
+                        points[self.yr - y].append(self.xr + px)
+                    if in_quadrant(px, -y, self.m):
+                        points[self.yr + y].append(self.xr + px)
+            else:
+                # Draw boundary points
+                if in_quadrant(x, y, self.m):
+                    points[self.yr - y].append(self.xr + x)
+                if in_quadrant(-x, y, self.m):
+                    points[self.yr - y].append(self.xr - x)
+                if in_quadrant(x, -y, self.m):
+                    points[self.yr + y].append(self.xr + x)
+                if in_quadrant(-x, -y, self.m):
+                    points[self.yr + y].append(self.xr - x)
+
+            if d1 < 0:
+                x += 1
+                dx += 2 * y_radius2
+                d1 += dx + y_radius2
+            else:
+                x += 1
+                y -= 1
+                dx += 2 * y_radius2
+                dy -= 2 * x_radius2
+                d1 += dx - dy + y_radius2
+
+        # Region 2
+        d2 = (y_radius2 * (x + 0.5) * (x + 0.5)) + (x_radius2 * (y - 1) * (y - 1)) - x_radius2y_radius2
+        while y >= 0:
+            if self.fill:
+                # Fill horizontal line between points
+                for px in range(-x, x + 1):
+                    if in_quadrant(px, y, self.m):
+                        points[self.yr - y].append(self.xr + px)
+                    if in_quadrant(px, -y, self.m):
+                        points[self.yr + y].append(self.xr + px)
+            else:
+                # Draw boundary points
+                if in_quadrant(x, y, self.m):
+                    points[self.yr - y].append(self.xr + x)
+                if in_quadrant(-x, y, self.m):
+                    points[self.yr - y].append(self.xr - x)
+                if in_quadrant(x, -y, self.m):
+                    points[self.yr + y].append(self.xr + x)
+                if in_quadrant(-x, -y, self.m):
+                    points[self.yr + y].append(self.xr - x)
+
+            if d2 > 0:
+                y -= 1
+                dy -= 2 * x_radius2
+                d2 += x_radius2 - dy
+            else:
+                y -= 1
+                x += 1
+                dx += 2 * y_radius2
+                dy -= 2 * x_radius2
+                d2 += dx - dy + x_radius2
+
+        return points
     @micropython.native
-    def elps(x_radius, y_radius, fill=False, m=0b1111):
+    def draw(self):
         """
         Convert an ellipse to a bytearray representation.
-
-        Parameters:
-            x_radius (int): Horizontal radius of the ellipse.
-            y_radius (int): Vertical radius of the ellipse.
-            fill (bool): Whether to fill the ellipse (default: False).
-            m (int): Mask to restrict drawing to certain quadrants (default: 0b1111).
-
-        Returns:
-            bytearray: The bytearray representation of the ellipse.
         """
-        width = 2 * x_radius + 1  # Total width of the ellipse
-        height = 2 * y_radius + 1  # Total height of the ellipse
-        row_size = (width + 7) // 8  # Number of bytes per row (rounded up)
-        result = bytearray(row_size * height)  # Preallocate the entire buffer
+        row_size = (self.width + 7) // 8  # Number of bytes per row (rounded up)
+        result = bytearray(row_size * self.height)  # Preallocate the entire buffer
 
-        for x, y in create_ellipse(x_radius, y_radius, fill, m):
+        for x, y in self.setup():
             # Compute the byte and bit index for the point
             byte_index = (y * row_size) + (x // 8)
             bit_index = 7 - (x % 8)  # Bits are stored MSB first
             result[byte_index] |= (1 << bit_index)  # Set the bit
-
         return result
+
+    @micropython.native
+    def draw2(self):
+        points = [p for p in self.setup()]
+        max_y = max(y for _, y in points)
+        grpt = [[] for _ in range(max_y+1)]
+        for x, y in points:
+            grpt[y].append(x)
+        bkgrd = 0 if self.c == 1 else 0xff
+        byte_width = (self.width+7)//8
+        for x_points in grpt:
+            if x_points:
+                bline = bytearray([bkgrd]*byte_width)
+                for pt in x_points:
+                    bline[pt//8] |= 1<<(7-(pt%8))
+                yield bline
+
+    @micropython.native
+    def draw22(self):
+        points = self.setup2()
+
+        bkgrd = 0 if self.c == 1 else 0xff
+        byte_width = (self.width + 7) // 8
+        for x_points in points:
+            if x_points:
+                bline = bytearray([bkgrd] * byte_width)
+                for pt in x_points:
+                    bline[pt // 8] |= 1 << (7 - (pt % 8))
+                yield bline
 
 
 class ChainBuff(Drawable): #mainly for writing fonts
@@ -440,8 +545,8 @@ class ChainBuff(Drawable): #mainly for writing fonts
     def setup(self):
         for ltr in self.st:
             gl = self.font.get_ch(ltr)
-            self.chr_l.append(self.l_by_l(gl[0], gl[2], gl[1])) if self.hor else self.chr_l.append(
-                self.l_by_l(gl[0], gl[1], gl[2]))
+            self.chr_l.append(l_by_l(gl[0], gl[2], gl[1])) if self.hor else self.chr_l.append(
+                l_by_l(gl[0], gl[1], gl[2]))
             self.w_l.append(gl[2])
 
     def draw(self):
@@ -461,7 +566,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
             for e, elem in enumerate(self.chr_l):
                 delta = self.fixed_w - self.w_l[e] if self.fixed_w else 0
                 for line in elem:
-                    yield bytearray(line) if not self.shift else self.shiftr(bytearray(line), self.shift)
+                    yield bytearray(line) if not self.shift else shiftr(bytearray(line), self.shift)
 
                 if bool(self.spacing+delta) & bool(e < len(self.chr_l) - 1):
                     for _ in range(self.spacing+delta): #plus delta
@@ -483,7 +588,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
                 fl.extend(bytearray(shbyte)) if shbyte else None
 
                 if shbit:
-                    lines = self.shiftr(bytearray(lines), int(cursor % 8))
+                    lines = shiftr(bytearray(lines), int(cursor % 8))
                     merge = fl[-1] | lines[0]
                     fl[-1] = merge
                     fl.extend(lines[1:-1])
@@ -491,43 +596,73 @@ class ChainBuff(Drawable): #mainly for writing fonts
                     fl.extend(lines)
             else:
                 width += shift
-                fl.extend(self.shiftr(lines, shift)) if shift else fl.extend(lines)
+                fl.extend(shiftr(lines, shift)) if shift else fl.extend(lines)
             cursor += int(width)
         return fl
 
-    @micropython.native
-    def l_by_l(self, buf, w, h):
-        width = w//8 if w%8 == 0 else w//8+1
-        for i in range(h):
-            yield buf[i*width:i*width+width]
+@micropython.native
+def l_by_l(buf, w, h):
+    width = w//8 if w%8 == 0 else w//8+1
+    for i in range(h):
+        yield buf[i*width:i*width+width]
 
-    @micropython.viper
-    def shiftr(self, ba: object, val: int) -> object:
-        if val <0:
-            raise ValueError('Number of bits must be positive')
-        if val == 0:
-            return ba
-        byteshift = val//8
-        bitshift = val % 8
-        lenba = int(len(ba))
-        result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
-        carry = 0
-        for i in range(lenba):
-            result[i + byteshift] = (int(ba[i]) >> bitshift) | carry
-            carry = (int(ba[i]) & ((1 << bitshift) -1)) << (8-bitshift)
-        if int(carry) > 0:
-            result[lenba+byteshift] = carry
-
-        return result
+@micropython.viper
+def shiftr( ba: object, val: int) -> object:
+    if val <0:
+        raise ValueError('Number of bits must be positive')
+    if val == 0:
+        return ba
+    byteshift = val//8
+    bitshift = val % 8
+    lenba = int(len(ba))
+    result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
+    carry = 0
+    for i in range(lenba):
+        result[i + byteshift] = (int(ba[i]) >> bitshift) | carry
+        carry = (int(ba[i]) & ((1 << bitshift) -1)) << (8-bitshift)
+    if int(carry) > 0:
+        result[lenba+byteshift] = carry
+    return result
 
 if __name__ is '__main__':
+    @timed_function
+    def draw1(obj):
+        a = obj.draw()
+        print(f'len = {len(a)}')
+        print(a)
+    @timed_function
+    def draw2(obj):
+        a = bytearray().join(obj.draw2())
+        print(f'len = {len(a)}')
+        print(a)
+    @timed_function
+    def draw22(obj):
+        a = bytearray().join(obj.draw22())
+        print(f'len = {len(a)}')
+        print(a)
+
     import numr110H, numr110V
-    
+    '''
+    el = Ellipse(100, 90, 0, 0, 1,True, True)
+    ec = Ellipse(100, 90, 0, 0, 1,True, True)
+    ed = Ellipse(100, 90, 0, 0, 1, True, True)
+    draw1(el)
+    draw2(ec)
+    draw22(ed) # Winner winner chicken dinner
+
     bl = StrLine(0, 0, 100, 1, 'v', True).draw()
     print(bl)
+    
+    al = ABLine(0, 0, 100, 4, 1, True).draw()
+    for v in al:
+        print(v)
+
+    r = Rect(3, 0, 10, 100, 1, True).draw()
+    for v in r:
+        print(v)
     '''
+    
     txt = ChainBuff('46', numr110V, 3, 4, False, 0, False)
     bb = txt.draw()
     for i in bb:
         print(i)
-    '''
