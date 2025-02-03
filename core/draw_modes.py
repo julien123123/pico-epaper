@@ -156,6 +156,14 @@ class DirectMode(DrawMode):
 
     # This mode has no transparency, if you need it, use Framebuf_mode, at least for the first full update.
     # In desparation you can always do a partial update to create the overlap of shapes
+    """
+    Works to show stuff in partial mode, but nothing is showing proprely; the dimmensions are off. ok, stuff shows proprely
+    when it's at 0,0, but non multiples of 8 don't show proprely. Maybe ther's something related to me changing the width and stuff
+    ellipse funtion says it can't allocate memory with draw2 and draw22.
+    Ping pong should be disabled in partial update for this mode as it prevents us from using a differential image.
+
+    Ah, seems that height and width properties are in pixels, not bytes. maybe I should add a property for the width in bytes
+    """
 
     def __init__(self, eink):
         super().__init__(eink)
@@ -163,7 +171,7 @@ class DirectMode(DrawMode):
     def _set_frame(self, x, y, h, w):
         """Setting the ram frame for each element"""
         absx, absy = self._abs_xy(x, y)
-        self.Eink._set_window(self.Eink._virtual_width(absx), self.Eink._virtual_width(absx+h), absy, absy+w) #This is a test, just to try the rest of this library
+        self.Eink._set_window(self.Eink._virtual_width(absx), self.Eink._virtual_width(absx+w), absy, absy+h) #This is a test, just to try the rest of this library
         '''
         self.Eink._set_frame(absx, absy, h, w) # ça serait plus _set_window(), mais il faut que ça se traduit de relatif à ab
         # ou changer pour _set_frame et setter le widh et height de la classe Eink
@@ -255,7 +263,12 @@ class DirectMode(DrawMode):
         c = self.Eink.black if not c else c
         ob = draw.Ellipse(x, y, xr, yr, c, not self.Eink._sqr, f, m)
         d = ob.draw22() # need to try before commiting to one of the draw methods
-        self._to_disp(d, x, y, ob.height, ob.width, c, diff)
+        b = bytearray()
+        for i in range(ob.height):
+            b.extend(next(d))
+        #for i in d:
+        #    b.extend(i)
+        self._to_disp(b, x, y, ob.height, ob.width, c, diff)
 
     def poly(self, x, y, coords, c=None, f=False):
         c = self.Eink.black if not c else c
@@ -269,7 +282,7 @@ class DirectMode(DrawMode):
         b = bytearray()
         for i in d:
             b.extend(i)
-        self._to_disp(b, x, y, ob.height, ob.width, c, diff)
+        self._to_disp(b, x, y, ob.bheight, ob.bwidth, c, diff)
 
     def img(self, x, y, buf, w, h, ram = RAM_BW, invert= False, diff = False):
         sh_buf = False

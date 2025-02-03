@@ -503,7 +503,6 @@ class Ellipse(Drawable):
     @micropython.native
     def draw22(self):
         points = self.setup2()
-
         bkgrd = 0 if self.c == 1 else 0xff
         byte_width = (self.width + 7) // 8
         for x_points in points:
@@ -541,6 +540,16 @@ class ChainBuff(Drawable): #mainly for writing fonts
     @property
     def height(self):
         return self.font.height() if self.hor else sum(self.w_l)+(self.spacing*(len(self.st)-1)) #or fixed width*len(self.st)
+
+    @property
+    def bwidth(self): # just width works if x is not already a multiple of 8
+        """ byte width """
+        return (self.width+(self.x%8))//8*8 + 8*bool((self.width+(self.x%8))%8) if self.hor else self.font.height()
+
+    @property
+    def bheight(self):
+        """ byte height """
+        return self.font.height() if self.hor else (self.height+(self.y%8))//8*8 + 8*bool((self.height+(self.y%8))%8)
 
     def setup(self):
         for ltr in self.st:
@@ -662,7 +671,7 @@ if __name__ is '__main__':
         print(v)
     '''
     
-    txt = ChainBuff('46', numr110V, 3, 4, False, 0, False)
+    txt = ChainBuff('46', numr110H, 3, 4, True, 0, False)
     bb = txt.draw()
     for i in bb:
         print(i)

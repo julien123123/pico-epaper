@@ -38,7 +38,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
             self._send(0x22, 0xf7) #if not self.monoc else self._send(0x22, 0xcf)
         else:
             self._send(0x1A, 0x6E)
-            self._send(0x22, 0xfc)
+            self._send(0x22, 0xff)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
@@ -74,4 +74,17 @@ if __name__ == "__main__":
     
     epd.partial_mode_off()
     epd.sleep()
+
+    epd.reinit()
+
+    import core.draw_modes as md
+    epd.partial_mode_on()
+    ac = md.DirectMode(epd)
+    #ac.rect(5, 5, 10, 10, f=True)
+    ac.text('12', numr110H, 204,1)
+    #ac.ellipse(10, 10, 30, 10, f= True)
+    ac.show()
+
+
+
  
