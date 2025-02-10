@@ -11,14 +11,107 @@ def timed_function(f, *args, **kwargs):
         return result
     return new_func
 
-
 class Drawable:
-    def __init__(self, x, y, hor):
+    blkl = []
+    whtl = []
+    main_row_pointer = 0
+    xspan = [0, 0]
+    yspan = [0, 0]
+
+    @classmethod
+    def c_width(cls):
+        return cls.xspan[1] - cls.xspan[0]
+
+    @classmethod
+    def c_height(cls):
+        return cls.yspan[1] - cls.yspan[0]
+
+    @classmethod
+    def draw_all(cls, screen_w: int, screen_h: int, k: int = -1,  full: bool = False, background :int = 1, red_ram: bool = False, black_ram: bool = False)-> object:
+        key_m = (cls.k_none, cls.k_0, cls.k_1)
+        if red_ram and black_ram:
+            raise ValueError('Cannot draw on both red and black ram at the same time')
+        ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
+        # making sure the span is within the screen
+        if cls.xspan[0] < 0:
+            cls.xspan[0] = 0
+        if cls.xspan[1] > screen_w:
+            cls.xspan[1] = screen_w
+        if cls.yspan[0] < 0:
+            cls.yspan[0] = 0
+        if cls.yspan[1] > screen_h:
+            cls.yspan[1] = screen_h
+        background = 0xff if background else 0x00
+
+        row_w = screen_w//8 if full else min(screen_w, cls.c_width())
+        total_height = cls.c_height() if not full else screen_h
+        cls.main_row_pointer = cls.yspan[0]
+        for line in range(total_height):
+            row = bytearray([background]*row_w)
+            for obj in cls.blkl:
+                if (obj.ram_flag & ram_chk) and obj.y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
+                    key_m[k+1](row, next(obj._gen), max(0, obj.actual_x//8))
+                    obj.row_pointer += 1
+            for obj in cls.whtl:
+                if (obj.ram_flag & ram_chk) and obj.y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
+                    key_m[k+1](row, next(obj._gen), max(0, obj.actual_x // 8))
+                    obj.row_pointer += 1
+            cls.main_row_pointer += 1
+            yield row
+
+    @micropython.viper
+    @staticmethod
+    def k_none(row: object, objline: object, first_x: int) -> ptr8:
+        for ind in range(int(len(objline))):
+            row[first_x + ind] = int(objline[ind])
+
+    @micropython.viper
+    @staticmethod
+    def k_0(row: object, objline: object, first_x: int) -> ptr8:
+        for ind in range(int(len(objline))):
+            row[first_x + ind] = int(row[first_x + ind]) & ~int(objline[ind])
+
+    @micropython.viper
+    @staticmethod
+    def k_1(row: object, objline: object, first_x: int) -> ptr8:
+        for ind in range(int(len(objline))):
+            row[first_x + ind] = int(row[first_x + ind]) | int(objline[ind])
+
+    @classmethod
+    def flush(cls):
+        cls.blkl = []
+        cls.whtl = []
+        cls.main_row_pointer = 0
+        cls.xspan = [0, 0]
+        cls.yspan = [0, 0]
+
+    @classmethod
+    def reset(cls):
+        cls.main_row_pointer = 0
+        for obj in cls.blkl:
+            obj.reset_draw()
+        for obj in cls.whtl:
+            obj.reset_draw()
+
+    @classmethod
+    def second_color(cls):
+        for obj in cls.blkl:
+            obj.c = obj.c >> 1
+        for obj in cls.whtl:
+            obj.c = obj.c >> 1
+
+    # BASIC DRAWABLE CLASS TO BE INHERITED BY ALL OTHER CLASSES
+
+    def __init__(self, x, y, hor, color):
         self.x = x
         self.y = y
+        self.c = color & 1
         self.actual_x = 0
         self.actual_y = 0
         self.hor = hor
+        self.row_pointer = 0
+        self._gen = self.draw()
+        self.ram_flag = 0b00
 
     @property
     def width(self):
@@ -33,15 +126,40 @@ class Drawable:
     def draw(self):
         raise NotImplementedError
 
+    def seek(self, point):
+        if point < 0:
+            raise ValueError('point must be greater than 0')
+        if point > self.height:
+            raise ValueError('point must be less than the height of the object')
+        self.row_pointer = point
+
+    def reset_draw(self):
+        self.setup()
+        self._gen = self.draw()
+        self.seek(0)
+
+    def _parse(self):
+        if self.c == 1:
+            Drawable.whtl.append(self)
+        else:
+            Drawable.blkl.append(self)
+        if self.x//8 < Drawable.xspan[0]:
+            Drawable.xspan[0] = self.x//8
+        if (self.x + self.width)//8 > Drawable.xspan[1]:
+            Drawable.xspan[1] = (self.x + self.width)//8
+        if self.y < Drawable.yspan[0]:
+            Drawable.yspan[0] = self.y
+        if self.y + self.height > Drawable.yspan[1]:
+            Drawable.yspan[1] = self.y + self.height
 
 class Pixel(Drawable):
     def __init__(self, x, y, color, hor):
-        super().__init__(x, y, hor)
+        super().__init__(x, y, color, hor)
         self.byte = 0
         self.actual_x = self.x - self.x%8 if self.hor else self.x
         self.actual_y = self.y - self.y%8 if not self.hor else self.y
-        self.c = color & 1
         self.setup()
+        self._parse()
 
     @property
     def width(self):
@@ -56,15 +174,13 @@ class Pixel(Drawable):
         self.byte = 0xff ^ (1 << (7-sh)) if not self.c else 1 << (7-sh)
 
     def draw(self):
-        return bytearray([self.byte])
-
+        yield bytearray([self.byte])
 
 class StrLine(Drawable):
     # Still have to do the vertical version
     def __init__(self, x, y, span, c, orientation, hor):
-        super().__init__(x, y, hor)
+        super().__init__(x, y, c, hor)
         self.span = span
-        self.color = c & 1
         self.orientation = orientation
         if self.orientation not in ('h', 'v'):
             raise ValueError('orientation must be either "h" or "v"')
@@ -72,6 +188,7 @@ class StrLine(Drawable):
         self.first = self.x % 8 if self.hor else self.y % 8
         self.actual_x = self.x - bool(self.first)*8 if self.hor else self.x
         self.actual_y = self.y - bool(self.first)*8 if not self.hor else self.y
+        self._parse()
         #self.setup()
 
     def setup(self):
@@ -110,7 +227,7 @@ class StrLine(Drawable):
     def aligned_l(self)-> object:
         line = bytearray()
         first = int(self.first)
-        col = int(self.color)
+        col = int(self.c)
         sp = int(self.span)
         
         if first:
@@ -133,7 +250,7 @@ class StrLine(Drawable):
 
     def sqr_l(self) -> object:
         # lines perpendicular to the display bytes
-        b = self.color << ( 7 - self.first )
+        b = self.c << ( 7 - self.first )
         return bytearray([b]*self.span)
 
     def draw(self):
@@ -143,16 +260,16 @@ class StrLine(Drawable):
 class ABLine(Drawable):
     # Lacks the possibility of drawing lines in different quadrants
     def __init__(self, x1, y1, x2, y2, c, hor):
-        super().__init__(x1, y1, hor)
+        super().__init__(x1, y1, c, hor)
         self.x2 = x2
         self.y2 = y2
         self.w = x2 - x1
         self.h = y2 - y1
-        self.color = c & 1
         self.first = x1 % 8 if hor else y1 % 8
         self.rem = (x2 - x1 - self.first) % 8 if hor else (y2 - y1 - self.first) % 8
         self.actual_x = x1 - self.first if hor else x1
         self.actual_y = y1 if hor else y1 - self.first
+        self._parse()
 
     @property
     def width(self):
@@ -196,7 +313,7 @@ class ABLine(Drawable):
         grouped_points = [[] for _ in range(max_y + 1)]
         for x, y in points:
             grouped_points[y].append(x)
-        bkgrd = 0 if self.color == 1 else 0xff
+        bkgrd = 0 if self.c == 1 else 0xff
         byte_width = self.width // 8 if self.hor else self.height // 8
         for x_points in grouped_points:
             if x_points:
@@ -212,16 +329,16 @@ class ABLine(Drawable):
 class Rect(Drawable):
     # not working for vertical rectangles yet
     def __init__(self, x, y, height, width, color, hor, f= True):
-        super().__init__(x, y, hor)
+        super().__init__(x, y, color, hor)
         self.h = height
         self.w = width
-        self.c = color & 1
         self.f = f
         self.first = self.x % 8 if self.hor else self.y % 8
         self.rem = (self.w - self.first)%8 if self.hor else (self.h - self.first)%8
         self.actual_x = self.x - self.first if self.hor else self.x
         self.actual_y = self.y - self.first if not self.hor else self.y
         self.setup()
+        self._parse()
 
     @property
     def width(self):
@@ -269,23 +386,15 @@ class Rect(Drawable):
         yield fline
         #yield bytearray([0x00]*((self.w+7)//8+1)) Je ne sais pas pourquoi j'ai mis ça là
 
-@micropython.viper
-def pixl(x:int,y:int,c:int)->object:
-    c = c&1
-    bitpos = x%8
-    b = c << bitpos
-    return bytearray([b])
-
-
 class Ellipse(Drawable):
     def __init__(self,xradius, yradius, x, y, color, hor, f = False, m = 0b1111):
         self.xr = xradius
         self.yr = yradius
         self.fill = f
-        self.c =color
         self.m = m
-        super().__init__(x, y, hor)
+        super().__init__(x, y, color, hor)
         self.setup()
+        self._parse()
 
     @property
     def width(self):
@@ -470,7 +579,7 @@ class Ellipse(Drawable):
 
         return points
     @micropython.native
-    def draw(self):
+    def draw22(self):
         """
         Convert an ellipse to a bytearray representation.
         """
@@ -501,7 +610,7 @@ class Ellipse(Drawable):
                 yield bline
 
     @micropython.native
-    def draw22(self):
+    def draw(self):
         points = self.setup2()
         bkgrd = 0 if self.c == 1 else 0xff
         byte_width = (self.width + 7) // 8
@@ -516,22 +625,22 @@ class Ellipse(Drawable):
 class ChainBuff(Drawable): #mainly for writing fonts
 
     """ajouter implémentation de fixed width pour vertical"""
-    def __init__(self, st, font, x, y, hor = False, spacing = 2, fixed_w = False):
+    def __init__(self, st, font, x, y, hor = False, spacing = 2, fixed_w = False, color = 1, invert = False):
+        super().__init__(x, y, color, hor)
         self.st = st
-        self.x = x
-        self.y = y
         self.spacing = spacing
         self.fixed_w = fixed_w if fixed_w != 'max' else font.max_width()
         self.font = font
-        self.hor = hor
         self.chr_l = []
         self.w_l = bytearray()
         self.shift = self.x%8 if self.hor else self.y%8
-        
+        self.invert = invert
+
         if self.fixed_w and self.fixed_w < self.font.max_width():
             raise ValueError(f"fixed_width should be equal to or greater than the font's max_width, use 'max' to use that value instead")
 
         self.setup()
+        self._parse()
 
     @property
     def width(self):
@@ -558,27 +667,37 @@ class ChainBuff(Drawable): #mainly for writing fonts
                 l_by_l(gl[0], gl[1], gl[2]))
             self.w_l.append(gl[2])
 
+    @micropython.viper
+    @staticmethod
+    def invert_bytes(byte_array: object) -> object:
+        return bytearray(~b & 0xFF for b in byte_array)
+
     def draw(self):
         """
         assemble lines of string
         """
-        if self.hor: #HORRIZONTAL
+        if self.hor:  # HORRIZONTAL
             for ln in range(self.height):
                 args = []
                 for index, elem in enumerate(self.chr_l):
-                    args.append(next(elem))
+                    line = next(elem)
+                    if self.invert:
+                        line = self.invert_bytes(line)
+                    args.append(line)
                 yield self.linec(self.shift, *args)
 
-        else: #VERTICAL
-            b_width = self.width//8 + bool(self.width%8)
+        else:  # VERTICAL
+            b_width = self.width // 8 + bool(self.width % 8)
 
             for e, elem in enumerate(self.chr_l):
                 delta = self.fixed_w - self.w_l[e] if self.fixed_w else 0
                 for line in elem:
+                    if self.invert:
+                        line = self.invert_bytes(line)
                     yield bytearray(line) if not self.shift else shiftr(bytearray(line), self.shift)
 
-                if bool(self.spacing+delta) & bool(e < len(self.chr_l) - 1):
-                    for _ in range(self.spacing+delta): #plus delta
+                if bool(self.spacing + delta) & bool(e < len(self.chr_l) - 1):
+                    for _ in range(self.spacing + delta):  # plus delta
                         yield bytearray(b_width)
 
 
@@ -609,6 +728,39 @@ class ChainBuff(Drawable): #mainly for writing fonts
             cursor += int(width)
         return fl
 
+    def reset_draw(self):
+        self.chr_l = []
+        self.w_l = bytearray()
+        super().reset_draw()
+
+
+class Prerendered(Drawable):
+    def __init__(self, x, y, h, w, buff, hor, color):
+        super().__init__(x, y, color, hor)
+        self.buff = buff
+        self.h = h
+        self.w = w
+        self.setup()
+        self.first = self.x % 8 if self.hor else self.y % 8
+        self.rem = (self.w - self.first) % 8 if self.hor else (self.h - self.first) % 8
+        self.actual_x = self.x - self.first if self.hor else self.x
+        self.actual_y = self.y - self.first if not self.hor else self.y
+        self._parse()
+
+    @property
+    def width(self):
+        return self.w + self.first + self.rem if self.hor else self.h + self.first + self.rem
+
+    @property
+    def height(self):
+        return self.h if self.hor else self.w
+
+    def setup(self):
+        pass
+
+    def draw(self):
+        yield shiftr(l_by_l(self.buff, self.w, self.h), self.first) if self.hor else shiftr(l_by_l(self.buff, self.h, self.w), self.first)
+
 @micropython.native
 def l_by_l(buf, w, h):
     width = w//8 if w%8 == 0 else w//8+1
@@ -634,23 +786,7 @@ def shiftr( ba: object, val: int) -> object:
     return result
 
 if __name__ is '__main__':
-    @timed_function
-    def draw1(obj):
-        a = obj.draw()
-        print(f'len = {len(a)}')
-        print(a)
-    @timed_function
-    def draw2(obj):
-        a = bytearray().join(obj.draw2())
-        print(f'len = {len(a)}')
-        print(a)
-    @timed_function
-    def draw22(obj):
-        a = bytearray().join(obj.draw22())
-        print(f'len = {len(a)}')
-        print(a)
-
-    import numr110H, numr110V
+    import numr110H
     '''
     el = Ellipse(100, 90, 0, 0, 1,True, True)
     ec = Ellipse(100, 90, 0, 0, 1,True, True)
@@ -670,8 +806,13 @@ if __name__ is '__main__':
     for v in r:
         print(v)
     '''
-    
-    txt = ChainBuff('46', numr110H, 3, 4, True, 0, False)
-    bb = txt.draw()
-    for i in bb:
+    txt = ChainBuff('W:34', numr110H, 30, 0, True, 0, False)
+    lll = Ellipse(50, 40, 10, 10, 1,True, False)
+    ln = Rect(6, 100, 1000, 100, 1, True)
+    d = Drawable.draw_all(480,280)
+    for i in d:
+        print(i)
+    Drawable.reset()
+    d = Drawable.draw_all(480,280)
+    for i in d:
         print(i)

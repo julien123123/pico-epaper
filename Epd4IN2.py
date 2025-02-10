@@ -63,7 +63,7 @@ if __name__ == "__main__":
     epd.partial_mode_on() 
     direct_text(epd, numr110H, '9', 73, 8, 8)
     epd.show_ram()
-    '''
+    
     epd.text('mimimimimi', 200, 200)
     epd.rect(0,0, 10, 10, f= True)
     epd.show()
@@ -71,20 +71,22 @@ if __name__ == "__main__":
     epd.text('lalalala', 100, 30)
     epd.show()
     #epd.show_ram()
+    '''
     
-    epd.partial_mode_off()
-    epd.sleep()
-
-    epd.reinit()
 
     import core.draw_modes as md
+    
+    ac = md.DirectMode(epd, md.BW2B)
+    ac.rect(0,0,1,1)
+    ac.show()
     epd.partial_mode_on()
-    ac = md.DirectMode(epd)
-    #ac.rect(5, 5, 10, 10, f=True)
-    ac.text('12', numr110H, 204,1)
+    ac.rect(20, 5, 40, 40, f=True, c = 0)
+    ac.text('22:48', numr110H, 8,40)
     #ac.ellipse(10, 10, 30, 10, f= True)
     ac.show()
-
-
+    ac.text('22:48', numr110H, 8,40, diff=True)
+    ac.text('22:45', numr110H, 8, 40)
+    ac.show()
+    epd.sleep()
 
  
