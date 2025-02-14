@@ -24,34 +24,34 @@ G2B = const(3)  # grayscale with 2 different buffers in black and white and red 
 class DirectMode:
 
     def __init__(self, eink, mode):
-        self.Eink = Eink
+        self.Eink = eink
         self.ram_fl= 0
         self.mode = mode
 
     def _set_frame(self):
         minx, maxx = draw.Drawable.xspan
         miny, maxy = draw.Drawable.yspan
-        self.Eink._set_window(minx, maxx, miny, maxy)
-        self.Eink._set_cursor(minx, miny)
+        self.Eink._set_window(minx, maxx-1, miny, maxy)
+        self.Eink._set_cursor(minx+1, miny)
 
-    def _color_sort(self):
+    def _color_sort(self, key):
         self.Eink._send_command(0x24)
         if self.mode == BW2X:
             buf = bytearray()
-            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full= True, black_ram=True):
+            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full= True, black_ram=True, k=key):
                 buf.extend(chunk)
             self.Eink._send_buffer(buf)
             self.Eink._send_command(0x26)
             self.Eink._send_buffer(buf)
         else:
             if self.ram_fl & 0b01:
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, black_ram=True):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, black_ram=True, k=key):
                     self.Eink._send_data(ba)
             if self.ram_fl & 0b10:
                 draw.Drawable.second_color() if self.mode is G2B else None
                 draw.Drawable.reset() if self.ram_fl & 0b01 else None
                 self.Eink._send_command(0x26)
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, red_ram=True):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, red_ram=True, k=key):
                     self.Eink._send_data(ba)
 
     def _ram_logic(self, obj, diff):
@@ -62,9 +62,10 @@ class DirectMode:
             obj.ram_flag |= 0b10
             self.ram_fl |= 0b10
 
+    #To be rewritten
     @micropython.native
     def fill(self, c=None, bw_ram=True):
-        c = self.white if not c else c
+        c = 1 if not c else c
         bbytes = 0xff if c & 1 else 0x00
         self._send_bw(bytearray([bbytes] * ((self.sqr_side + 7) * self.ic_side // 8))) if bw_ram else None
         if not self._partial and not self.monoc or not bw_ram:
@@ -102,22 +103,23 @@ class DirectMode:
         self._ram_logic(d, diff)
 
     def poly(self, x, y, coords, c=None, f=False):
+        raise NotImplementedError
         #c = self.Eink.black if not c else c
-        pass
+        #pass
 
-    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False):
+    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True):
         #x y are always at the top left of the text line
         c = self.Eink.black if not c else c
-        d = draw.ChainBuff(text, font, x, y, not self.Eink._sqr,  spacing, fixed_width)
+        d = draw.ChainBuff(text, font, x, y, hor = not self.Eink._sqr, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert)
         self._ram_logic(d, diff)
 
-    def img(self, x, y, buf, w, h, ram = RAM_BW, invert= False, diff = False):
+    def img(self, x, y, buf, w, h, ram = 0, invert= False, diff = False):
         d = draw.Prerendered(x, y, h, w, buf, not self.Eink._sqr, 1)
         self._ram_logic(d, diff)
 
-    def show(self, flush = True):  # previously show_ram
+    def show(self, flush = True, key = -1):  # previously show_ram
         self._set_frame()
-        self._color_sort()
+        self._color_sort(key)
         self.Eink._updt_ctrl_2()
         self.Eink._ld_norm_lut(0)
         self.Eink._send_command(0x20)

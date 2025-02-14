@@ -48,45 +48,32 @@ if __name__ == "__main__":
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
     epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28), use_partial_buffer=False)
 
-    def direct_text(epd, font, text, w, x, y, invert = True): # won't create framebuf object if not needed
-        cur = x
-        for char in text:
-            cc = font.get_ch(char)
-            arr = bytearray(cc[0])
-            if invert:
-                for i, v in enumerate(cc[0]):
-                    arr[i] = 0xFF & ~ v
-            epd.quick_buf(cc[2], cc[1], cur, y, arr)
-            cur += w
-        epd.wndw_set = False #will have to do this better somehow
-    ''' 
-    epd.partial_mode_on() 
-    direct_text(epd, numr110H, '9', 73, 8, 8)
-    epd.show_ram()
-    
-    epd.text('mimimimimi', 200, 200)
-    epd.rect(0,0, 10, 10, f= True)
-    epd.show()
-    epd.partial_mode_on()
-    epd.text('lalalala', 100, 30)
-    epd.show()
-    #epd.show_ram()
-    '''
-    
-
     import core.draw_modes as md
+    from core.draw import Drawable as DR
     
     ac = md.DirectMode(epd, md.BW2B)
     ac.rect(0,0,1,1)
     ac.show()
     epd.partial_mode_on()
-    ac.rect(20, 5, 40, 40, f=True, c = 0)
-    ac.text('22:48', numr110H, 8,40)
-    #ac.ellipse(10, 10, 30, 10, f= True)
-    ac.show()
-    ac.text('22:48', numr110H, 8,40, diff=True)
-    ac.text('22:45', numr110H, 8, 40)
-    ac.show()
+    manx = 19
+    k=0
+    ac.rect(359, 50, 40, 40, f=True, c = 0)
+    ac.text('42:48', numr110H, manx,100)
+    ac.line(9,23, 57, 10)
+    #print(DR.xspan, DR.yspan)
+
+    ac.ellipse(43, 30, 79, 80, f= False)
+    print(DR.xspan, DR.yspan)
+    ac.show(key=k)
+    epd.sleep()
+    # Yup, we are sleeping babe
+    epd.reinit()
+    ac.text('22:48', numr110H, manx,100, diff=True)
+    ac.text('22:45', numr110H, manx,100)
+    ac.show(key=k)
+    #epd.partial_mode_off()
+    #ac.text('6', numr110H, 0, 0)
+    #ac.show()
     epd.sleep()
 
  
