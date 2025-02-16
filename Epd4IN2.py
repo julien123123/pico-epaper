@@ -42,7 +42,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
-    import numr110H
+    import numr110H, freesans20
     
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
@@ -52,26 +52,33 @@ if __name__ == "__main__":
     from core.draw import Drawable as DR
     
     ac = md.DirectMode(epd, md.BW2B)
+    ac.text('6', numr110H, 0, 0)
     ac.rect(0,0,1,1)
     ac.show()
+    #epd.clear()
     epd.partial_mode_on()
-    manx = 19
+    manx = 6
     k=0
-    ac.rect(359, 50, 40, 40, f=True, c = 0)
+    ac.rect(220, 30, 40, 40, f=True, c = 0)
     ac.text('42:48', numr110H, manx,100)
-    ac.line(9,23, 57, 10)
+    ac.text(' Mercredi 20 dec 2025', freesans20, manx,2, c=1)
+    #ac.line(9,23, 57, 10)
     #print(DR.xspan, DR.yspan)
 
     ac.ellipse(43, 30, 79, 80, f= False)
     print(DR.xspan, DR.yspan)
+    #ac.vline(0, 100, 100, 1)
     ac.show(key=k)
     epd.sleep()
     # Yup, we are sleeping babe
     epd.reinit()
-    ac.text('22:48', numr110H, manx,100, diff=True)
+    ac.text('42:48', numr110H, manx,100, diff=True)
     ac.text('22:45', numr110H, manx,100)
+    print(DR.xspan, DR.yspan)
     ac.show(key=k)
-    #epd.partial_mode_off()
+    ac.text('WN:DW', numr110H, manx, 100)
+    ac.show(key=k)
+    epd.partial_mode_off()
     #ac.text('6', numr110H, 0, 0)
     #ac.show()
     epd.sleep()

@@ -32,7 +32,7 @@ class DirectMode:
         minx, maxx = draw.Drawable.xspan
         miny, maxy = draw.Drawable.yspan
         self.Eink._set_window(minx, maxx-1, miny, maxy)
-        self.Eink._set_cursor(minx+1, miny)
+        self.Eink._set_cursor(minx, miny)
 
     def _color_sort(self, key):
         self.Eink._send_command(0x24)
