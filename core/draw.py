@@ -701,12 +701,11 @@ if __name__ is '__main__':
     txt.ram_flag = 1
     #lll = Ellipse(10, 10, 100,0, 0,True, False)
     #lll.ram_flag = 1
-    ln = Rect(3, 10, 39, 20, 0, 0, True)
-    ln.ram_flag = 1
-    lin= StrLine(11, 10,20, 1, 'v', True)
+    #ln = Rect(3, 10, 39, 20, 0, 0, True)
+    #ln.ram_flag = 1
+    lin= StrLine(45, 10,40, 0, 'v', True)
     lin.ram_flag = 1
     d = Drawable.draw_all(480,280, black_ram = True)
     #d = lin.draw()
-    print(Drawable.xspan, Drawable.yspan)
     for i in d:
         grid_print(i)

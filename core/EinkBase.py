@@ -13,8 +13,7 @@ class EinkBase:
     RAM_RBW = const(0b11)
     x_set = 0  # format to send x width to the display
 
-    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False,
-                 monochrome=True):
+    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, monochrome=True):
         if rotation in (0,180):
             self.width = self.ic_side
             self.height = self.sqr_side
@@ -58,14 +57,11 @@ class EinkBase:
 
         # Don't start in partial mode.
         self._partial = False
-        self._use_partial_buffer = use_partial_buffer
 
         # Flag to tell if the window size instruction was sent
         self.wndw_set = False
         self.inited = False  # inited flag
         self.ram_inv = False
-
-        # self.fill()
 
         self._init_disp()
         sleep_ms(500)
@@ -203,9 +199,7 @@ class EinkBase:
         """Public method for screen reinitialisation."""
         self._init_disp()
 
-    def partial_mode_on(self, width=None, height=None, pingpong=True):
-        self.width = width or self.width
-        self.height = height or self.height
+    def partial_mode_on(self, pingpong=True):
         pp = 0x4f if pingpong else 0xf
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
         self._clear_ram()

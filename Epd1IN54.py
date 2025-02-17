@@ -44,7 +44,7 @@ if __name__ == "__main__":
     from machine import Pin, SPI
     import core.draw_modes as md
     from core.draw import Drawable as DR
-    import numr110H
+    import numr110H,freesans20
     
     p= Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
@@ -52,8 +52,9 @@ if __name__ == "__main__":
     #epd.clear()
     ac = md.DirectMode(epd, md.BW2X)
     #epd.partial_mode_on()
-    ac.text('84', numr110H, 20, 20)
-    ac.show()
+    ac.text("J'aime ca les patates!", freesans20, 0, 140)
+    ac.text('19', numr110H, 20, 20, c = 1)
+    ac.show(key = 0)
     epd.sleep()
     '''
     epd.reinit()

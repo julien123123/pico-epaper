@@ -1,4 +1,4 @@
-# Pico_ePaper WIP
+# Pico_ePaper Work in Progress!
 
 <div align="center">
 
@@ -7,14 +7,17 @@
 </div>
 
 I am currently working on expanding functionalities of the original Pico ePaper library. I want to add:
+
 - Support for 2.9in epaper display
 - Support for partial update after deepsleep
-- Support for partial update on smaller parts of the display to save on ressources
-- Direct write to the display without having to use FrameBuffer or the Writer class, which is better for lower memory use, for slower mcus. It also uses less energu in the end
+- Support for partial update on smaller parts of the display to save on resources
+- Direct write to the display without having to use FrameBuffer or the Writer class, which is better for lower memory use, for slower mcus. It also uses less energy in the end
 - support for 2 in display buffered screens, also good for slower mcus.
 - support for white partial updates over black
 
-I've made it worked on some of my project, but I figured it would be easyer for me in the future if my modifications are well written in one library.
+The implementation of everything is still a work in progress as I keep discovering new things. It's complicated to make everything
+fit together, so I have to make decisions, and it makes it hard to keep up to date with the documentation for now.
+The display specific files probably have an example of what is currently working at the bottom of them.
 
 Here's the rest of the normal readme:
 
@@ -38,30 +41,11 @@ There's also a significant memory overhead associated with the processing.
 Currently, I have no solution to this problem, except using EinkPIO whenever possible.
 
 #not in my version, but I'm not maintaining einkpio... so...
----
-
-## Default pins
-Both classes use the same default pin configuration:
-
-<div align="center">
-
-| Signal      | Pin  |
-| :---------- | :--- |
-| SCK         | GP10 |
-| MOSI        | GP11 |
-| CS          | GP9  |
-| DC          | GP8  |
-| RST (reset) | GP12 |
-| BUSY        | GP13 |
-
-</div>
 
 ---
 
 ## Constructors
-**Eink(rotation=0, spi=None, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False)**
-
-**EinkPIO(rotation=0, sm_num=0, dma=5, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, use_partial_buffer=False)**
+**Eink(rotation=0, spi=None, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, monochrome=True)**
 
 Constructors for these classes take multiple optional arguments that allow setting desired rotation as well as custom
 pin assignments.
@@ -84,11 +68,11 @@ Otherwise, the BW buffer is used in partial mode.
 
 ___
 
-### show(lut=0)
+### show(flush = True, key = -1)
 Sends current frame buffer to screen and start refresh cycle.
 
-_lut_ - allows setting desire lookup table for this refresh (defaults to 0).
-Incorrect setting can result in unexpected behaviour.
+'flush' empties the list of object to be drawn the display.
+'key' the number is equal to the color that will be transparent. -1 means no transparency at all
 
 ---
 
@@ -97,8 +81,9 @@ Puts display in sleep mode.
 
 ---
 
-### partial_mode_on()
+### partial_mode_on(pingpong = False)
 Enables partial updates mode.
+'pingpong' allows fot the use of 2 buffer interchangeably. each time you use the show() method, the image in red ram goes in bw ram and goes on screen. The images are conserved on the ram.
 
 ---
 
@@ -107,7 +92,22 @@ Disables partial updates mode.
 
 ---
 
-Additionally, the module supports all standard drawing methods found in FrameBuffer class:
+### invert_ram(bw=True, red=True)
+Inverts the bits in the selected display ram (both are by default)
+
+---
+
+### clear()
+This method clears the display without any additional setup
+
+---
+
+### reinit()
+Reinits the display. Has to be used after sleep()
+
+---
+
+Additionally, the module has DirectDraw which is very similar to drawing methods found in FrameBuffer class:
 1. fill(c=white)
 2. pixel(x, y, c=black)
 3. hline(x, y, w, c=black)
@@ -115,9 +115,26 @@ Additionally, the module supports all standard drawing methods found in FrameBuf
 5. line(x1, y1, x2, y2, c=black)
 6. rect(x, y, w, h, c=black, f=False)
 7. ellipse(x, y, xr, yr, c=black, f=False, m=15)
+- 'm' parameter lets you specify which quarter you want to be shown in binary. A full circle is 15 because 15 = 0b1111
 8. poly(x, y, coords, c=black, f=False)
-9. text(text, x, y, c=black)
+- not implemented yet
+9. text(text, font, x, y, c=black, spacing = False, fixed_width = False, invert = True)
+- 'text()' uses [font_to_py.py fonts from Peter Hinch's library on GitHub](https://github.com/peterhinch/micropython-font-to-py/tree/master) I did not include default fonts because I didn't want to deal with de licenses.
+- 'spacing' parameter is for specifying spaces between characters.
+- 'fixed_width' is used if you want all characters to occupy the same amount of space. It can be easy if you need to do partial updates, and you will only have to change one character in a string like in a clock.
+
+> [!TIP]
+> For faster rendering time, you can pre-invert the colour of your fonts, and pre-invert the bytes if your font is vertical.
+
 10. blit(fbuf, x, y, key=-1, palette=None, ram=RAM_RBW)
+- 'blit' will just send a pre-rendered buffer directly to the display
+- This is the method you want to use if you need to use 'framebuf.Framebuffer'. You can create a FrameBuffer object, send it with blit, and use the 'show()' method to display it.
+
+'diff' parameter: you can use this parameter along with those methods to send the drawn object directly to the red ram 
+of the display. In partial mode with BW2B, the black drawings sent to the red buffer that are white in bw ram will turn 
+white after show(). If you activate ping pong mode, drawings where diff=True will update the buffer part by part saved in
+red ram. Upon show(), the buffer in the red ram will be shown, and the one that was in bw ram will go in the red ram to be
+modified.
 
 ---
 
