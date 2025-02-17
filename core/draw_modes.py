@@ -31,18 +31,18 @@ class DirectMode:
     def _set_frame(self):
         minx, maxx = draw.Drawable.xspan
         miny, maxy = draw.Drawable.yspan
-        self.Eink._set_window(minx, maxx-1, miny, maxy)
-        self.Eink._set_cursor(minx, miny)
+        self.Eink._set_window(self.Eink._virtual_width(minx*8), self.Eink._virtual_width(maxx*8)-1, miny, maxy)
+        self.Eink._set_cursor(self.Eink._virtual_width(minx*8), miny)
 
     def _color_sort(self, key):
         self.Eink._send_command(0x24)
         if self.mode == BW2X:
             buf = bytearray()
-            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full= True, black_ram=True, k=key):
+            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, True, black_ram=True):
                 buf.extend(chunk)
-            self.Eink._send_buffer(buf)
+            self.Eink._send_data(buf)
             self.Eink._send_command(0x26)
-            self.Eink._send_buffer(buf)
+            self.Eink._send_data(buf)
         else:
             if self.ram_fl & 0b01:
                 for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, black_ram=True, k=key):
@@ -113,7 +113,7 @@ class DirectMode:
         d = draw.ChainBuff(text, font, x, y, hor = not self.Eink._sqr, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert)
         self._ram_logic(d, diff)
 
-    def img(self, x, y, buf, w, h, ram = 0, invert= False, diff = False):
+    def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False):
         d = draw.Prerendered(x, y, h, w, buf, not self.Eink._sqr, 1)
         self._ram_logic(d, diff)
 
@@ -121,7 +121,7 @@ class DirectMode:
         self._set_frame()
         self._color_sort(key)
         self.Eink._updt_ctrl_2()
-        self.Eink._ld_norm_lut(0)
+        self.Eink._ld_norm_lut() if not self.Eink._partial else self.Eink._ld_part_lut()
         self.Eink._send_command(0x20)
         self.Eink._read_busy()
         self.ram_fl = 0

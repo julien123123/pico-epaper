@@ -1,8 +1,6 @@
 from core.Eink import Eink
 from ustruct import pack
 
-#Works!
-
 class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     x_set = '2B'
     white = 0b01
@@ -15,12 +13,13 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
         self._seqs = (0x03, 0x06, 0x00, 0x05)  # structure ( 0°, 90°, 180°, 270°) 3605 pour framebuf = parfait
         super().__init__(spi, *args, **kwargs)
 
-    def _clear_ram(self, bw=True, red=True):
+    def _clear_ram(self, bw=True, red=True, black = False):
+        col = 0x66 if black else 0xe6
         if red:
-            self._send(0x46, 0xe6) #0x66 for black screen
+            self._send(0x46, col) #0x66 for black screen
             self._read_busy()
         if bw:
-            self._send(0x47, 0xe6)
+            self._send(0x47, col)
             self._read_busy()
 
     def _set_gate_nb(self):
@@ -42,7 +41,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
-    import numr110H, freesans20
+    import numr110H, freesans20, time
     
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
@@ -51,11 +50,14 @@ if __name__ == "__main__":
     import core.draw_modes as md
     from core.draw import Drawable as DR
     
-    ac = md.DirectMode(epd, md.BW2B)
-    ac.text('6', numr110H, 0, 0)
-    ac.rect(0,0,1,1)
+    ac = md.DirectMode(epd, md.BW2X)
+    ac.text('3', numr110H, 20, 20, c = 1)
+    #ac.rect(350,250,50,50)
+    #next(DR.draw_all(400, 300, -1, True, black_ram = True))
+    #DR.reset()
     ac.show()
-    #epd.clear()
+    epd._clear_ram()
+    ac.mode = md.BW2B
     epd.partial_mode_on()
     manx = 6
     k=0
@@ -66,7 +68,6 @@ if __name__ == "__main__":
     #print(DR.xspan, DR.yspan)
 
     ac.ellipse(43, 30, 79, 80, f= False)
-    print(DR.xspan, DR.yspan)
     #ac.vline(0, 100, 100, 1)
     ac.show(key=k)
     epd.sleep()
@@ -74,7 +75,6 @@ if __name__ == "__main__":
     epd.reinit()
     ac.text('42:48', numr110H, manx,100, diff=True)
     ac.text('22:45', numr110H, manx,100)
-    print(DR.xspan, DR.yspan)
     ac.show(key=k)
     ac.text('WN:DW', numr110H, manx, 100)
     ac.show(key=k)

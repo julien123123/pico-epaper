@@ -1,6 +1,5 @@
-# code works for driving te display, but still have the right modes / luts to figure out as images in the bw buffer in the
-# the display shows as light gray (which is what happened the first time I drove all the other displays). Seems like it
-# is using a different formula for the coordinates than all the other displays.
+# works perfectly with direct draw when _partial even with the diffs
+# works on a full update if full != True
 
 from core.Eink import Eink
 from ustruct import pack
@@ -43,9 +42,23 @@ class EPD1IN54(Eink):  # SSD1681
 
 if __name__ == "__main__":
     from machine import Pin, SPI
-    p = Pin(15, Pin.OUT)
+    import core.draw_modes as md
+    from core.draw import Drawable as DR
+    import numr110H
+    
+    p= Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
     epd = EPD1IN54(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
-    epd.text('heller', 0, 0)
-    epd.show()
-    
+    #epd.clear()
+    ac = md.DirectMode(epd, md.BW2X)
+    #epd.partial_mode_on()
+    ac.text('84', numr110H, 20, 20)
+    ac.show()
+    epd.sleep()
+    '''
+    epd.reinit()
+    ac.text('84', numr110H, 20, 20, diff=True)
+    ac.text('WW', numr110H, 20, 20)
+    ac.show()
+    epd.sleep()
+    '''

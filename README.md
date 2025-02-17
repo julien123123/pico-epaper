@@ -72,10 +72,6 @@ value is 0, i.e. screen is horizontal with USB connector facing upwards.
 **Eink** class takes additional _spi_ argument that allows setting custom SPI object to be used, if not set it defaults
 to SPI(1, baudrate=20_000_000).
 
-**EinkPIO** constructor takes two optional arguments:
-1. _sm_num_ - sets which State Machine to use (valid values: 0-7, defaults to 0).
-2. _dma_ - allows changing the DMA channel (defaults to 5).
-
 By default, Pins setup reflects usage of the e-Paper display as a shield for Raspberry Pi Pico, but the user
 can supply custom configuration for use with different boards and microcontrollers (tested with ESP-WROOM-32).
 

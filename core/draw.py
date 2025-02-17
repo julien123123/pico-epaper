@@ -34,15 +34,18 @@ class Drawable:
         if red_ram and black_ram:
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
-        # making sure the span is within the screen
-        if cls.xspan[0] < 0:
-            cls.xspan[0] = 0
-        if cls.xspan[1] > screen_w // 8:
-            cls.xspan[1] = screen_w // 8
-        if cls.yspan[0] < 0:
-            cls.yspan[0] = 0
-        if cls.yspan[1] > screen_h:
-            cls.yspan[1] = screen_h
+        if full:
+            cls.xspan = [0, screen_w//8]
+            cls.yspan = [0, screen_h]
+        else:
+            # making sure the span is within the screen
+            cls.xspan[0] = max(cls.xspan[0], 0)
+            cls.xspan[1] = min(cls.xspan[1], screen_w // 8)
+            cls.yspan[0] = max(cls.yspan[0], 0)
+            cls.yspan[1] = min(cls.yspan[1], screen_h)
+
+        print(f"x span = {cls.xspan}, y span = {cls.yspan}")
+
         background = 0xff if background else 0x00
 
         row_w = screen_w//8 if full else cls.c_width()
@@ -529,7 +532,7 @@ class Ellipse(Drawable):
 
 class ChainBuff(Drawable): #mainly for writing fonts
     """ajouter implémentation de fixed width pour vertical"""
-    def __init__(self, st, font, x, y, hor, spacing = 2, fixed_w = False, color = 1, invert = True):
+    def __init__(self, st, font, x, y, hor, spacing = 2, fixed_w = False, color = 0, invert = True):
         super().__init__(x, y, hor, color)
         self.st = st
         self.spacing = spacing
@@ -592,7 +595,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
         else: # Vertical
             for e, elem in enumerate(self.chr_l):
                 delta = self.fixed_w - self.w_l[e*2:e*2+2] if self.fixed_w else 0
-                for line in l_by_l(elem, self.font.height(), unpack('H', self.w_l[e*2:e*2+2])): #TODO
+                for line in l_by_l(elem, self.font.height(), unpack('H', self.w_l[e*2:e*2+2])[0]): #TODO
                     if self.invert:
                         line = self.invert_bytes(line)
                     yield line if not self.shift else shiftr(line, self.shift)
