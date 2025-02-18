@@ -117,7 +117,7 @@ class EPDPico(Eink):  # SSD1677
             self._read_busy()
 
     def _ld_norm_lut(self, lut=False):
-        self._load_LUT(l) if l else self._load_LUT(0) if not self.monoc else self._load_LUT(1)
+        self._load_LUT(lut) if lut else self._load_LUT(0) if not self.monoc else self._load_LUT(1)
 
     def _ld_part_lut(self):
         self._load_LUT(2)
@@ -128,20 +128,22 @@ if __name__ == "__main__":
     
     p = Pin(2, Pin.OUT)  # To restet the epd
     epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None)  # SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-    epd = EPDPico(rotation=0, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11), use_partial_buffer=False)  # Epaper setup (instance of EINK)
+    epd = EPDPico(rotation=0, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
     epd.clear()
     import core.draw_modes as md
     from core.draw import Drawable as DR
     import numr110
 
-    ac = md.DirectMode(epd, md.BW1B)
-    epd.partial_mode_on()
-    ac.text('33', numr110, 134, 88, c=1)
+    epd.draw.rect(0,0, 50, 50, f=True)
+    epd.draw.show()
+
+    epd.opmode(2, True, True, True)
+    epd.draw.text('33', numr110, 134, 88, c=1)
     # objects too far in the last bit on the right throw off the alignement
     #like anything that touches the rightmost side, the lines get missaligned even if I print the buffer and it looks like it should
     
-    #ac.rect(224,430,50,50, f=True)
+    epd.draw.rect(224,430,50,50, f=True)
     #print(next(DR.draw_all(280, 480, -1, True, black_ram = True)))
     # DR.reset()
-    ac.show()
+    epd.draw.show()
     epd.sleep()

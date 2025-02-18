@@ -71,25 +71,32 @@ ___
 ### show(flush = True, key = -1)
 Sends current frame buffer to screen and start refresh cycle.
 
-'flush' empties the list of object to be drawn the display.
-'key' the number is equal to the color that will be transparent. -1 means no transparency at all
+`flush` empties the list of object to be drawn the display.
+
+`key` the number is equal to the color that will be transparent. -1 means no transparency at all
 
 ---
 
-### sleep()
+### sleep(ram_on = False)
 Puts display in sleep mode.
+- `ram_on` will keep the ram on while sleeping. This will use a bit more current.
 
 ---
 
-### partial_mode_on(pingpong = False)
-Enables partial updates mode.
-'pingpong' allows fot the use of 2 buffer interchangeably. each time you use the show() method, the image in red ram goes in bw ram and goes on screen. The images are conserved on the ram.
+### opmode(nbuf = 1, bw = True, partial = False, pingpong = False)
+Enables different update modes for the display
 
----
+- `pingpong` allows fot the use of 2 buffer interchangeably. each time you use the show() method, the image in red ram goes in bw ram and goes on screen. The images are conserved on the ram.
+    - in partial mode, pingpong = True, will allow for sequential updates without having to send the differential image every time.
 
-### partial_mode_off()
-Disables partial updates mode.
+- `nbuf` is the number of buffers you want to use. 1 is the default value. 1 in full mode is more economical. In partial mode, may want to use 2 for differential updates, or if you want to control ping pong as 2 interchangeable buffers. Otherwise, if pingpong is true, you can use 1 buffer, and the display should erase the last every time. If you want black on white, you will need to diff buffer, so use 2.
+  - Shades of grey mode will automatically use 2 buffers.
 
+- `partial` is for quick partial updates. if False, the display will be updated completely with the ram content.
+
+- `bw` is false if you want to use shades of grey. Otherwise, set it to True.
+> [!NOTE]
+> When you call this method, only change the parameters you need. All the other parameters will be set from the epd attributes.
 ---
 
 ### invert_ram(bw=True, red=True)
@@ -115,22 +122,22 @@ Additionally, the module has DirectDraw which is very similar to drawing methods
 5. line(x1, y1, x2, y2, c=black)
 6. rect(x, y, w, h, c=black, f=False)
 7. ellipse(x, y, xr, yr, c=black, f=False, m=15)
-- 'm' parameter lets you specify which quarter you want to be shown in binary. A full circle is 15 because 15 = 0b1111
+- `m` parameter lets you specify which quarter you want to be shown in binary. A full circle is 15 because 15 = 0b1111
 8. poly(x, y, coords, c=black, f=False)
 - not implemented yet
 9. text(text, font, x, y, c=black, spacing = False, fixed_width = False, invert = True)
-- 'text()' uses [font_to_py.py fonts from Peter Hinch's library on GitHub](https://github.com/peterhinch/micropython-font-to-py/tree/master) I did not include default fonts because I didn't want to deal with de licenses.
-- 'spacing' parameter is for specifying spaces between characters.
-- 'fixed_width' is used if you want all characters to occupy the same amount of space. It can be easy if you need to do partial updates, and you will only have to change one character in a string like in a clock.
+- `text()` uses [font_to_py.py fonts from Peter Hinch's library on GitHub](https://github.com/peterhinch/micropython-font-to-py/tree/master) I did not include default fonts because I didn't want to deal with de licenses.
+- `spacing` parameter is for specifying spaces between characters.
+- `fixed_width` is used if you want all characters to occupy the same amount of space. It can be easy if you need to do partial updates, and you will only have to change one character in a string like in a clock.
 
 > [!TIP]
 > For faster rendering time, you can pre-invert the colour of your fonts, and pre-invert the bytes if your font is vertical.
 
 10. blit(fbuf, x, y, key=-1, palette=None, ram=RAM_RBW)
-- 'blit' will just send a pre-rendered buffer directly to the display
+- `blit` will just send a pre-rendered buffer directly to the display
 - This is the method you want to use if you need to use 'framebuf.Framebuffer'. You can create a FrameBuffer object, send it with blit, and use the 'show()' method to display it.
 
-'diff' parameter: you can use this parameter along with those methods to send the drawn object directly to the red ram 
+`diff` parameter: you can use this parameter along with those methods to send the drawn object directly to the red ram 
 of the display. In partial mode with BW2B, the black drawings sent to the red buffer that are white in bw ram will turn 
 white after show(). If you activate ping pong mode, drawings where diff=True will update the buffer part by part saved in
 red ram. Upon show(), the buffer in the red ram will be shown, and the one that was in bw ram will go in the red ram to be

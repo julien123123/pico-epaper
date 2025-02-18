@@ -1,5 +1,5 @@
 from machine import Pin
-import framebuf
+import core.draw_modes as dms
 from utime import sleep_ms
 from ustruct import pack
 
@@ -28,43 +28,36 @@ class EinkBase:
 
         self._rotation = rotation
         self.monoc = monochrome  # black and white only flag
+        self.pp = False  # pingpong flag
+        self.x2 = False  # Some displays need the buffer to be sent twice in normal mode
         self.cur_seq = self._seqs[int(rotation/90)]
+        self.draw = dms.DirectMode(self, 0)
 
-        if reset_pin is None:
-            self._rst = Pin(12, Pin.OUT, value=0)
-        else:
-            self._rst = reset_pin
-            self._rst.init(Pin.OUT, value=0)
+        self._rst = reset_pin
+        self._rst.init(Pin.OUT, value=0)
+        self._dc = dc_pin
+        self._dc.init(Pin.OUT, value=0)
+        self._cs = cs_pin
+        self._cs.init(Pin.OUT, value=1)
+        self._busy = busy_pin
+        self._busy.init(Pin.IN)
 
-        if dc_pin is None:
-            self._dc = Pin(8, Pin.OUT, value=0)
-        else:
-            self._dc = dc_pin
-            self._dc.init(Pin.OUT, value=0)
-
-        if cs_pin is None:
-            self._cs = Pin(9, Pin.OUT, value=1)
-        else:
-            self._cs = cs_pin
-            self._cs.init(Pin.OUT, value=1)
-
-        if busy_pin is None:
-            self._busy = Pin(13, Pin.IN, Pin.PULL_UP)
-        else:
-            self._busy = busy_pin
-            self._busy.init(Pin.IN)
-
-
-        # Don't start in partial mode.
         self._partial = False
 
         # Flag to tell if the window size instruction was sent
+        # To be removed
         self.wndw_set = False
-        self.inited = False  # inited flag
+        self.inited = False
         self.ram_inv = False
 
         self._init_disp()
         sleep_ms(500)
+
+    def _sort_ram(self):
+        if self.draw.mode is dms.BW1B:
+            self._void_ram(red=True)
+        else:
+            self._void_ram()
 
     def _reset(self):
         self._rst(1)
@@ -143,6 +136,8 @@ class EinkBase:
 
         self._set_VCOM()
 
+        #self.opmode() causes problems if inited at the begining like that
+        self._sort_ram()
         self.inited = True
 
         def _abs_xy(self, rel_x, rel_y):
@@ -199,6 +194,31 @@ class EinkBase:
         """Public method for screen reinitialisation."""
         self._init_disp()
 
+    def opmode(self, nbuf = 1, bw = None, partial = None, pingpong = None):
+        """Set the hardware and software operation mode of the display"""
+        # Change attributes only if specified
+        setattr(self, 'monoc', bw) if bw is not None else None
+        setattr(self, 'pp', pingpong) if pingpong is not None else None
+
+        if self.monoc:
+            if nbuf == 1:
+                self.draw.mode = dms.BW1B if not self.x2 else dms.BW2X
+            elif nbuf == 2:
+                self.draw.mode= dms.BW2B
+            else:
+                raise ValueError('Only 1 or 2 buffers can be selected')
+            setattr(self, '_partial', partial) if partial is not None else None
+        else:
+            # This always has 2 buffers
+            self.draw.mode = dms.G2B
+            self._partial = False
+
+        col = 0xff if self._partial else 0x00
+        pp = 0x4f if self.pp else 0xf
+        self._send(0x37, pack("10B", 0x00, col, col, col, col, pp, col, col, col, col)) # The last 4 bytes don't matter
+        self._clear_ram()
+        self._sort_ram()
+
     def partial_mode_on(self, pingpong=True):
         pp = 0x4f if pingpong else 0xf
         self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
@@ -222,8 +242,8 @@ class EinkBase:
         else: # Top left
             self._set_cursor(0,0) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(abs_x) -1, abs_y - 1)
 
-    def sleep(self):
-        self._send(0x10, 0x03)
+    def sleep(self, ram_on = False):
+        self._send(0x10, 0x03) if ram_on == False else self._send(0x10, 0x01)
         self.inited = False
         self.wndw_set = False
         self.ram_inv = False

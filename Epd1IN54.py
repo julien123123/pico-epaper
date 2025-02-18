@@ -48,18 +48,16 @@ if __name__ == "__main__":
     
     p= Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
-    epd = EPD1IN54(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16), use_partial_buffer=False)
-    #epd.clear()
-    ac = md.DirectMode(epd, md.BW2X)
-    #epd.partial_mode_on()
-    ac.text("J'aime ca les patates!", freesans20, 0, 140)
-    ac.text('19', numr110H, 20, 20, c = 1)
-    ac.show(key = 0)
+    epd = EPD1IN54(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16))   #epd.clear()
+    
+    epd.draw.text("J'aime ca les patates!", freesans20, 0, 140)
+    epd.draw.text('19', numr110H, 20, 20, c = 1)
+    epd.draw.show(key = 0)
     epd.sleep()
-    '''
+
     epd.reinit()
-    ac.text('84', numr110H, 20, 20, diff=True)
-    ac.text('WW', numr110H, 20, 20)
-    ac.show()
+    epd.opmode(2, True, True, True)
+    epd.draw.text('19', numr110H, 20, 20, diff=True)
+    epd.draw.text('WW', numr110H, 20, 20)
+    epd.draw.show()
     epd.sleep()
-    '''

@@ -1,4 +1,3 @@
-from core.EinkBase import EinkBase
 import core.draw as draw
 # --------------------------------------------------------
 # Drawing routines (directly to the display).
@@ -38,20 +37,20 @@ class DirectMode:
         self.Eink._send_command(0x24)
         if self.mode == BW2X:
             buf = bytearray()
-            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, True, black_ram=True):
+            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, False, black_ram=True):
                 buf.extend(chunk)
             self.Eink._send_data(buf)
             self.Eink._send_command(0x26)
             self.Eink._send_data(buf)
         else:
             if self.ram_fl & 0b01:
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, black_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=False, black_ram=True, k=key):
                     self.Eink._send_data(ba)
             if self.ram_fl & 0b10:
                 draw.Drawable.second_color() if self.mode is G2B else None
                 draw.Drawable.reset() if self.ram_fl & 0b01 else None
                 self.Eink._send_command(0x26)
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=not self.Eink._partial, red_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=False, red_ram=True, k=key):
                     self.Eink._send_data(ba)
 
     def _ram_logic(self, obj, diff):
@@ -124,5 +123,5 @@ class DirectMode:
         self.Eink._ld_norm_lut() if not self.Eink._partial else self.Eink._ld_part_lut()
         self.Eink._send_command(0x20)
         self.Eink._read_busy()
-        self.ram_fl = 0
+        setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None

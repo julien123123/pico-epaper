@@ -46,6 +46,14 @@ class Eink(EinkBase):
         else:
             self._send_data(buffer)
 
+    def _void_ram(self, bw = False, red = False):
+        '''voids the ram'''
+        b = 0
+        b += 1 << 2 if bw else 0
+        b += 1 << 6 if red else 0
+        self._send(0x21, b)
+
+
     def _ld_norm_lut(self, lut=False):
         pass
 
@@ -85,3 +93,7 @@ class Eink(EinkBase):
         self._send_command(0x26)
         self._send_data(bytearray([0xff] * s))
         self.show_ram(0)
+
+    def show(self, flush = True, key = -1):
+        ''' This makes it easier to update the display'''
+        self.draw.show(flush, key)
