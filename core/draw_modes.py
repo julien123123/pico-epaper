@@ -13,6 +13,9 @@ import core.draw as draw
 BW1B = const(0) # black and white with 1 buffer in black and white ram
 
 BW2X = const(1) # black and white with 2 copy of the same buffer in black and white ram and red ram
+# This mode might only work because in normal update mode, the white in bw ram is opaque, and the black is
+# transparent to what's in the red ram voiding red ram achieves the same thing. Many of the drivers I found
+# used this formula for full updates. That's why I included it here.
 
 BW2B = const(2) # black and white with 2 different buffers in black and white and red ram
 # BW2B works with ping pong buffers, where 2 buffers get shown and updated alternately, and partial mode, where red ram
@@ -27,30 +30,30 @@ class DirectMode:
         self.ram_fl= 0
         self.mode = mode
 
-    def _set_frame(self):
-        minx, maxx = draw.Drawable.xspan
-        miny, maxy = draw.Drawable.yspan
+    def _set_frame(self, full):
+        minx, maxx = draw.Drawable.xspan if not full else (0, self.Eink.width//8)
+        miny, maxy = draw.Drawable.yspan if not full else (0, self.Eink.height)
         self.Eink._set_window(self.Eink._virtual_width(minx*8), self.Eink._virtual_width(maxx*8)-1, miny, maxy)
         self.Eink._set_cursor(self.Eink._virtual_width(minx*8), miny)
 
-    def _color_sort(self, key):
+    def _color_sort(self, full, key):
         self.Eink._send_command(0x24)
         if self.mode == BW2X:
             buf = bytearray()
-            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, False, black_ram=True):
+            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, black_ram=True):
                 buf.extend(chunk)
             self.Eink._send_data(buf)
             self.Eink._send_command(0x26)
             self.Eink._send_data(buf)
         else:
             if self.ram_fl & 0b01:
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=False, black_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=full, black_ram=True, k=key):
                     self.Eink._send_data(ba)
             if self.ram_fl & 0b10:
                 draw.Drawable.second_color() if self.mode is G2B else None
                 draw.Drawable.reset() if self.ram_fl & 0b01 else None
                 self.Eink._send_command(0x26)
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=False, red_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=full, red_ram=True, k=key):
                     self.Eink._send_data(ba)
 
     def _ram_logic(self, obj, diff):
@@ -116,12 +119,28 @@ class DirectMode:
         d = draw.Prerendered(x, y, h, w, buf, not self.Eink._sqr, 1)
         self._ram_logic(d, diff)
 
-    def show(self, flush = True, key = -1):  # previously show_ram
-        self._set_frame()
-        self._color_sort(key)
+    def show(self,full = False, flush = True, key = -1):
+        self._set_frame(full)
+        self._color_sort(full,key)
         self.Eink._updt_ctrl_2()
         self.Eink._ld_norm_lut() if not self.Eink._partial else self.Eink._ld_part_lut()
         self.Eink._send_command(0x20)
         self.Eink._read_busy()
+        setattr(self, 'ram_fl', 0) if flush else None
+        draw.Drawable.flush() if flush else None
+
+    def export(self, full = False, flush = True, key = -1, bw = True, red = False):
+        """Returns the results of Drawable.draw_all in a buffer"""
+        buf_bw = (bytearray(b''.join(draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, black_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if bw else False
+        buf_red = (bytearray(b''.join(draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
+
+        setattr(self, 'ram_fl', 0) if flush else None
+        draw.Drawable.flush() if flush else None
+        return buf_bw, buf_red
+
+    def send_to_disp(self, full= False, flush = True, key = -1):
+        """Function to send the current buffer to the display without triggering an update"""
+        self._set_frame(full)
+        self._color_sort(full, key)
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None

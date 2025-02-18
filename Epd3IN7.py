@@ -135,15 +135,18 @@ if __name__ == "__main__":
     import numr110
 
     epd.draw.rect(0,0, 50, 50, f=True)
-    epd.draw.show()
+    epd.show(full=True)
 
-    epd.opmode(2, True, True, True)
+    #epd(2, True, True, True)
     epd.draw.text('33', numr110, 134, 88, c=1)
-    # objects too far in the last bit on the right throw off the alignement
-    #like anything that touches the rightmost side, the lines get missaligned even if I print the buffer and it looks like it should
+    # objects too far in the last bit on the right throw off the alignment
+    #like anything that touches the rightmost side, the lines get misaligned even if I print the buffer, and it looks like it should
+    # in full mode, it works, byt the last bit is cut ou
+    # The distortion pattern seems to imply that the width is not proper.
+    # I think it's a matter of the display missing one byte in the buffer compared to x_span
     
-    epd.draw.rect(224,430,50,50, f=True)
+    epd.draw.rect(230,430,50,50, f=True)
     #print(next(DR.draw_all(280, 480, -1, True, black_ram = True)))
     # DR.reset()
-    epd.draw.show()
+    epd.show(full = True)
     epd.sleep()

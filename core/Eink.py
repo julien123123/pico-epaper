@@ -94,6 +94,7 @@ class Eink(EinkBase):
         self._send_data(bytearray([0xff] * s))
         self.show_ram(0)
 
-    def show(self, flush = True, key = -1):
+    def show(self, full = False, flush = True, key = -1, clear = False):
         ''' This makes it easier to update the display'''
-        self.draw.show(flush, key)
+        self._clear_ram() if clear else None
+        self.draw.show(full, flush, key)

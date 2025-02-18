@@ -45,22 +45,21 @@ class Drawable:
             cls.yspan[1] = min(cls.yspan[1], screen_h)
 
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
-
         background = 0xff if background else 0x00
-
-        row_w = screen_w//8 if full else cls.c_width()
-        total_height = cls.c_height() if not full else screen_h
+        row_w = cls.c_width()
+        total_height = cls.c_height()
         cls.main_row_pointer = cls.yspan[0]
+
         for line in range(total_height):
             row = bytearray([background]*row_w)
             for obj in cls.blkl:
                 if (obj.ram_flag & ram_chk) and obj.y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
-                    first_x = max(0, obj.actual_x // 8) if full else max(0, obj.actual_x //8 - cls.xspan[0])
+                    first_x = max(0, obj.actual_x //8 - cls.xspan[0])
                     key_m[k+1](row, next(obj._gen), first_x)
                     obj.row_pointer += 1
             for obj in cls.whtl:
                 if (obj.ram_flag & ram_chk) and obj.y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
-                    first_x = max(0, obj.actual_x // 8) if full else max(0, obj.actual_x //8 - cls.xspan[0])
+                    first_x = max(0, obj.actual_x //8 - cls.xspan[0])
                     key_m[k+1](row, next(obj._gen), first_x)
                     obj.row_pointer += 1
             cls.main_row_pointer += 1
@@ -703,9 +702,9 @@ if __name__ is '__main__':
     #lll.ram_flag = 1
     #ln = Rect(3, 10, 39, 20, 0, 0, True)
     #ln.ram_flag = 1
-    lin= StrLine(45, 10,40, 0, 'v', True)
+    lin= StrLine(0, 10,40, 0, 'v', True)
     lin.ram_flag = 1
-    d = Drawable.draw_all(480,280, black_ram = True)
+    d = Drawable.draw_all(128,96, full= False, black_ram = True)
     #d = lin.draw()
     for i in d:
         grid_print(i)

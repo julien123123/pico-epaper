@@ -51,10 +51,13 @@ if __name__ == "__main__":
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
     epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
-    epd.draw.text('3', numr110H, 20, 20, c = 1)
+    
+    epd.draw.text('3', numr110H, 0, 0, c = 1)
     epd.draw.rect(350,250,50,50)
-    epd.draw.show()
-    epd.opmode(2, bw= True, partial=True)
+    epd.show()
+    epd.draw.ellipse(10,10, 40, 100)
+    epd.show(clear=True)
+    epd(2, bw= True, partial=True)
     manx = 6
     k=0
     epd.draw.rect(220, 30, 40, 40, f=True, c = 0)
@@ -64,12 +67,12 @@ if __name__ == "__main__":
     epd.draw.ellipse(43, 30, 79, 80, f= False)
 
     epd.draw.show(key=k)
-    epd.opmode(1, True, False, False)
+    epd(1, True, False, False)
     epd.sleep()
     
     # Yup, we are sleeping babe
     epd.reinit()
-    epd.opmode(2, bw=True, partial = True, pingpong = True)
+    epd(2, bw=True, partial = True, pingpong = True)
 
     epd.draw.text('42:48', numr110H, manx,100, diff=True)
     epd.draw.text('22:45', numr110H, manx,100)
@@ -77,7 +80,7 @@ if __name__ == "__main__":
     epd.draw.text('WN:DW', numr110H, manx, 100)
     epd.draw.show(key=k)
     epd.show_ram()
-    epd.opmode(1, partial=False)
+    epd(1, partial=False)
     epd.sleep()
 
  

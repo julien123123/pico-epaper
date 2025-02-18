@@ -52,12 +52,12 @@ if __name__ == "__main__":
     
     epd.draw.text("J'aime ca les patates!", freesans20, 0, 140)
     epd.draw.text('19', numr110H, 20, 20, c = 1)
-    epd.draw.show(key = 0)
+    epd.show(key = 0)
     epd.sleep()
 
     epd.reinit()
-    epd.opmode(2, True, True, True)
+    epd(2, True, True, True)
     epd.draw.text('19', numr110H, 20, 20, diff=True)
     epd.draw.text('WW', numr110H, 20, 20)
-    epd.draw.show()
+    epd.show()
     epd.sleep()

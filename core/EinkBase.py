@@ -190,11 +190,7 @@ class EinkBase:
     # Public methods.
     # --------------------------------------------------------
 
-    def reinit(self):
-        """Public method for screen reinitialisation."""
-        self._init_disp()
-
-    def opmode(self, nbuf = 1, bw = None, partial = None, pingpong = None):
+    def __call__(self, nbuf = 1, bw = None, partial = None, pingpong = None):
         """Set the hardware and software operation mode of the display"""
         # Change attributes only if specified
         setattr(self, 'monoc', bw) if bw is not None else None
@@ -219,16 +215,9 @@ class EinkBase:
         self._clear_ram()
         self._sort_ram()
 
-    def partial_mode_on(self, pingpong=True):
-        pp = 0x4f if pingpong else 0xf
-        self._send(0x37, pack("10B", 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
-        self._clear_ram()
-        self._partial = True
-
-    def partial_mode_off(self):
-        self._send(0x37, pack("10B", 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00))
-        self._clear_ram()
-        self._partial = False
+    def reinit(self):
+        """Public method for screen reinitialisation."""
+        self._init_disp()
 
     def zero(self, abs_x=0, abs_y=0, lut=0):
         """Pointing the zero of the buffer in absolute display coordinate"""

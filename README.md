@@ -6,20 +6,14 @@
 
 </div>
 
-I am currently working on expanding functionalities of the original Pico ePaper library. I want to add:
+### I am currently working on expanding functionalities of the original Pico ePaper library. I want to add support to as much display options as possible
 
-- Support for 2.9in epaper display
-- Support for partial update after deepsleep
-- Support for partial update on smaller parts of the display to save on resources
-- Direct write to the display without having to use FrameBuffer or the Writer class, which is better for lower memory use, for slower mcus. It also uses less energy in the end
-- support for 2 in display buffered screens, also good for slower mcus.
-- support for white partial updates over black
 
 The implementation of everything is still a work in progress as I keep discovering new things. It's complicated to make everything
 fit together, so I have to make decisions, and it makes it hard to keep up to date with the documentation for now.
 The display specific files probably have an example of what is currently working at the bottom of them.
 
-Here's the rest of the normal readme:
+### Here's the rest of the normal readme:
 
 This module is a basic driver for Waveshare [Pico e-Paper 3.7 display](https://www.waveshare.com/wiki/Pico-ePaper-3.7).
 It supports grayscale mode and allows setting screen rotation. Drawing routines are compatible with
@@ -34,13 +28,11 @@ Both classes offer the same functionality and the only difference is the optiona
 
 ---
 
-## Note (Eink only)
+## Note 
 **show()** method takes considerably longer for rotations 90 and 270, than 0 and 180 (~700 ms vs 80 ms). This is normal and
 is a result of additional data processing required before sending buffers to the screen in landscape mode.
 There's also a significant memory overhead associated with the processing.
-Currently, I have no solution to this problem, except using EinkPIO whenever possible.
 
-#not in my version, but I'm not maintaining einkpio... so...
 
 ---
 
@@ -68,12 +60,33 @@ Otherwise, the BW buffer is used in partial mode.
 
 ___
 
-### show(flush = True, key = -1)
+### show(full = False, flush = True, key = -1, clear = False)
 Sends current frame buffer to screen and start refresh cycle.
 
 `flush` empties the list of object to be drawn the display.
 
 `key` the number is equal to the color that will be transparent. -1 means no transparency at all
+
+`clear` will clear the ram before sending the buffer to the display. If it is set to False, and Full is False, all images sent to the display will be retained between refreshes.
+
+`full` Will send a whole buffer to the display, essentially erasing the last one. It takes more memory
+
+---
+
+### draw.export(full = False, flush = True, key = -1, bw = True, red = False)
+Same Params as show(), but will return the current buffer a tuple of the `red` and/pr `bw` buffer if either is True.
+
+The tuples will be structured like so: (bw_buffer, width in bytes, height), (red_buffer, width in bytes, height)
+
+---
+
+### draw.send_to_disp(full= False, flush = True, key = -1)
+Sends the buffers to the display without refreshing. This allows you to draw de display asynchronously.
+
+The parameters are exactly the same as the show() method.
+
+>[!NOTE]
+>  The display ram dont have any transparency, if you send a buffer to the display RAM, you override what was there before.
 
 ---
 
@@ -83,18 +96,21 @@ Puts display in sleep mode.
 
 ---
 
-### opmode(nbuf = 1, bw = True, partial = False, pingpong = False)
-Enables different update modes for the display
+### \__call__(nbuf = 1, bw = True, partial = False, pingpong = False)
+Enables different update modes for the display. Use it by calling the name of your instance and adding the parameters in parentheses.
 
 - `pingpong` allows fot the use of 2 buffer interchangeably. each time you use the show() method, the image in red ram goes in bw ram and goes on screen. The images are conserved on the ram.
     - in partial mode, pingpong = True, will allow for sequential updates without having to send the differential image every time.
+    - If the red buffer remains unchanged, and you want to cycle through both buffers, just use `show_ram()`.
 
 - `nbuf` is the number of buffers you want to use. 1 is the default value. 1 in full mode is more economical. In partial mode, may want to use 2 for differential updates, or if you want to control ping pong as 2 interchangeable buffers. Otherwise, if pingpong is true, you can use 1 buffer, and the display should erase the last every time. If you want black on white, you will need to diff buffer, so use 2.
   - Shades of grey mode will automatically use 2 buffers.
+  - In full mode, if you use 2 buffers, bw ram will show white as opaque and black as transparent. Red ram will show black as opaque and white as transparent. The red ram will show images normally within what is black in the bw ram. That's why in 1 buffer mode, the red ram is voided.
 
 - `partial` is for quick partial updates. if False, the display will be updated completely with the ram content.
 
 - `bw` is false if you want to use shades of grey. Otherwise, set it to True.
+  - in grey mode, all other options are False, and the display will use 2 buffers.
 > [!NOTE]
 > When you call this method, only change the parameters you need. All the other parameters will be set from the epd attributes.
 ---
