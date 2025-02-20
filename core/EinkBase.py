@@ -31,7 +31,7 @@ class EinkBase:
         self.pp = False  # pingpong flag
         self.x2 = False  # Some displays need the buffer to be sent twice in normal mode
         self.cur_seq = self._seqs[int(rotation/90)]
-        self.draw = dms.DirectMode(self, 0)
+        self.draw = dms.DirectMode(self, 0, not self._sqr)
 
         self._rst = reset_pin
         self._rst.init(Pin.OUT, value=0)
@@ -140,24 +140,24 @@ class EinkBase:
         self._sort_ram()
         self.inited = True
 
-        def _abs_xy(self, rel_x, rel_y):
-            """:returns absolute display coordinates"""
-            x, y = (rel_y, rel_x) if (self.cur_seq >> 2) & 1 else (rel_x, rel_y)
-            seq = self.cur_seq & 0b11
-            abs_x, abs_y = 0,0
-            if not seq:
-                abs_x = self.ic_side - x
-                abs_y = self.sqr_side - y
-            elif seq == 1:
-                abs_x = x
-                abs_y = self.sqr_side - y
-            elif seq == 2:
-                abs_x = self.ic_side - x
-                abs_y = y
-            else: #seq == 3
-                abs_x = x
-                abs_y = y
-            return abs_x, abs_y
+    def _abs_xy(self, rel_x, rel_y):
+        """:returns absolute display coordinates"""
+        x, y = (rel_y, rel_x) if (self.cur_seq >> 2) & 1 else (rel_x, rel_y)
+        seq = self.cur_seq & 0b11
+        abs_x, abs_y = 0,0
+        if not seq:
+            abs_x = self.ic_side - 1 - x
+            abs_y = self.sqr_side - 1 - y
+        elif seq == 1:
+            abs_x = x
+            abs_y = self.sqr_side - 1  - y
+        elif seq == 2:
+            abs_x = self.ic_side - 1 - x
+            abs_y = y
+        else: #seq == 3
+            abs_x = x
+            abs_y = y
+        return abs_x, abs_y
 
     # --------------------------------------------------------
     # Dummy Methods that get overridden by child classes

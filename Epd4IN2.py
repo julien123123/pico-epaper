@@ -45,7 +45,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
-    import numr110H, freesans20, time
+    import numr110H, numr110V, freesans20, time
     from core.draw import Drawable as DR
     
     p = Pin(27, Pin.OUT)

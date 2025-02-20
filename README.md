@@ -85,6 +85,8 @@ Sends the buffers to the display without refreshing. This allows you to draw de 
 
 The parameters are exactly the same as the show() method.
 
+Use show_ram() to refresh the display when you are done.
+
 >[!NOTE]
 >  The display ram dont have any transparency, if you send a buffer to the display RAM, you override what was there before.
 

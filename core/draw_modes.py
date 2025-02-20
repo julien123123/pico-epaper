@@ -25,16 +25,38 @@ G2B = const(3)  # grayscale with 2 different buffers in black and white and red 
 
 class DirectMode:
 
-    def __init__(self, eink, mode):
+    def __init__(self, eink, mode, hor):
         self.Eink = eink
         self.ram_fl= 0
         self.mode = mode
+        self.hor = hor
+
+        draw.Drawable.hor = self.hor
 
     def _set_frame(self, full):
-        minx, maxx = draw.Drawable.xspan if not full else (0, self.Eink.width//8)
-        miny, maxy = draw.Drawable.yspan if not full else (0, self.Eink.height)
-        self.Eink._set_window(self.Eink._virtual_width(minx*8), self.Eink._virtual_width(maxx*8)-1, miny, maxy)
-        self.Eink._set_cursor(self.Eink._virtual_width(minx*8), miny)
+        seq = self.Eink.cur_seq & 0b11
+        xspan = draw.Drawable.xspan if not full else [0, self.Eink.width//8 - 1]
+        yspan = draw.Drawable.yspan if not full else [0, self.Eink.height - 1]
+
+        # xspan is already in bytes, no need for *8 multiplication
+        minx = xspan[0]
+        maxx = xspan[1]
+
+        if seq == 0:  # bottom right (180)
+            minx, maxx = self.Eink._virtual_width(self.Eink.width - 1 - maxx * 8), self.Eink._virtual_width(self.Eink.width - 1 - minx * 8)
+            miny, maxy = self.Eink.height - 1 - yspan[1], self.Eink.height - 1 - yspan[0]
+        elif seq == 1:  # bottom left (270)
+            minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
+            miny, maxy = self.Eink.height - 1 - yspan[1], self.Eink.height - 1 - yspan[0]
+        elif seq == 2:  # top right (90)
+            minx, maxx = self.Eink._virtual_width(self.Eink.width - 1 - maxx * 8), self.Eink._virtual_width(self.Eink.width - 1 - minx * 8)
+            miny, maxy = yspan[0], yspan[1]
+        else:  # 3 top left (0)
+            minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
+            miny, maxy = yspan[0], yspan[1]
+
+        self.Eink._set_window(minx, maxx, miny, maxy)
+        self.Eink._set_cursor(minx, miny)
 
     def _color_sort(self, full, key):
         self.Eink._send_command(0x24)
@@ -76,32 +98,32 @@ class DirectMode:
 
     def pixel(self, x, y, c=None, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.Pixel(x, y, c, not self.Eink._sqr)
+        d = draw.Pixel(x, y, c)
         self._ram_logic(d, diff)
 
     def hline(self, x, y, w, c=None, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.StrLine(x, y, w, c, 'h', not self.Eink._sqr)
+        d = draw.StrLine(x, y, w, c, 'h')
         self._ram_logic(d, diff)
 
     def vline(self, x, y, h, c=None, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.StrLine(x, y, h, c, 'v', not self.Eink._sqr)
+        d = draw.StrLine(x, y, h, c, 'v')
         self._ram_logic(d, diff)
 
     def line(self, x1, y1, x2, y2, c=None, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.ABLine(x1, y1, x2, y2, c, not self.Eink._sqr)
+        d = draw.ABLine(x1, y1, x2, y2, c)
         self._ram_logic(d, diff)
 
     def rect(self, x, y, w, h, c=None, f=False, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.Rect(x, y, w, h, c, not self.Eink._sqr, f)
+        d = draw.Rect(x, y, w, h, c, f)
         self._ram_logic(d, diff)
 
     def ellipse(self, x, y, xr, yr, c=None, f=False, m=15, diff = False):
         c = self.Eink.black if not c else c
-        d = draw.Ellipse(x, y, xr, yr, c, not self.Eink._sqr, f, m)
+        d = draw.Ellipse(x, y, xr, yr, c, f, m)
         self._ram_logic(d, diff)
 
     def poly(self, x, y, coords, c=None, f=False):
@@ -112,11 +134,11 @@ class DirectMode:
     def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True):
         #x y are always at the top left of the text line
         c = self.Eink.black if not c else c
-        d = draw.ChainBuff(text, font, x, y, hor = not self.Eink._sqr, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert)
+        d = draw.ChainBuff(text, font, x, y, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert)
         self._ram_logic(d, diff)
 
     def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False):
-        d = draw.Prerendered(x, y, h, w, buf, not self.Eink._sqr, 1)
+        d = draw.Prerendered(x, y, h, w, buf, 1)
         self._ram_logic(d, diff)
 
     def show(self,full = False, flush = True, key = -1):

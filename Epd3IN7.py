@@ -129,7 +129,7 @@ if __name__ == "__main__":
     p = Pin(2, Pin.OUT)  # To restet the epd
     epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None)  # SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
     epd = EPDPico(rotation=0, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
-    epd.clear()
+    #epd.clear()
     import core.draw_modes as md
     from core.draw import Drawable as DR
     import numr110
@@ -138,15 +138,9 @@ if __name__ == "__main__":
     epd.show(full=True)
 
     #epd(2, True, True, True)
-    epd.draw.text('33', numr110, 134, 88, c=1)
-    # objects too far in the last bit on the right throw off the alignment
-    #like anything that touches the rightmost side, the lines get misaligned even if I print the buffer, and it looks like it should
-    # in full mode, it works, byt the last bit is cut ou
-    # The distortion pattern seems to imply that the width is not proper.
-    # I think it's a matter of the display missing one byte in the buffer compared to x_span
-    
-    epd.draw.rect(230,430,50,50, f=True)
-    #print(next(DR.draw_all(280, 480, -1, True, black_ram = True)))
-    # DR.reset()
-    epd.show(full = True)
+    #epd.draw.text('33', numr110, 0, 0, c=1)
+    # False alert, there is still a problem when stuff gets too close to the border on that display.
+    for i in range(8):
+        epd.draw.rect(80+i, 10+i*62, 60, 60, f=True)
+    epd.show(full = True, key=0)
     epd.sleep()
