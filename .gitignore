@@ -128,3 +128,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+numr110H.py
+numr110V.py
+freesans20.py
+freesans20V.py

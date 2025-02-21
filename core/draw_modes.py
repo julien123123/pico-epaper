@@ -33,49 +33,52 @@ class DirectMode:
 
         draw.Drawable.hor = self.hor
 
-    def _set_frame(self, full):
+    def _set_frame(self):
+        """Note: The -1 are to account for the 1 pixel having address 0 (instead of 1 like when we count pixels)"""
         seq = self.Eink.cur_seq & 0b11
-        xspan = draw.Drawable.xspan if not full else [0, self.Eink.width//8 - 1]
-        yspan = draw.Drawable.yspan if not full else [0, self.Eink.height - 1]
+        xspan = draw.Drawable.xspan
+        yspan = draw.Drawable.yspan
 
         # xspan is already in bytes, no need for *8 multiplication
         minx = xspan[0]
         maxx = xspan[1]
 
         if seq == 0:  # bottom right (180)
-            minx, maxx = self.Eink._virtual_width(self.Eink.width - 1 - maxx * 8), self.Eink._virtual_width(self.Eink.width - 1 - minx * 8)
-            miny, maxy = self.Eink.height - 1 - yspan[1], self.Eink.height - 1 - yspan[0]
+            minx, maxx = self.Eink._virtual_width(self.Eink.ic_side - 1 - minx * 8), self.Eink._virtual_width(self.Eink.ic_side - 1 - maxx * 8)
+            miny, maxy = self.Eink.sqr_side - 1 - yspan[0], self.Eink.sqr_side - 1 - yspan[1]
         elif seq == 1:  # bottom left (270)
             minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
-            miny, maxy = self.Eink.height - 1 - yspan[1], self.Eink.height - 1 - yspan[0]
+            miny, maxy = self.Eink.sqr_side - 1 - yspan[0], self.Eink.sqr_side - 1 - yspan[1]
         elif seq == 2:  # top right (90)
-            minx, maxx = self.Eink._virtual_width(self.Eink.width - 1 - maxx * 8), self.Eink._virtual_width(self.Eink.width - 1 - minx * 8)
+            minx, maxx = self.Eink._virtual_width(self.Eink.ic_side - 1 - minx * 8), self.Eink._virtual_width(self.Eink.ic_side - 1 - maxx * 8)
             miny, maxy = yspan[0], yspan[1]
         else:  # 3 top left (0)
             minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
             miny, maxy = yspan[0], yspan[1]
 
         self.Eink._set_window(minx, maxx, miny, maxy)
+        #self.Eink._set_frame()
         self.Eink._set_cursor(minx, miny)
+        #self.Eink.zero()
 
-    def _color_sort(self, full, key):
+    def _color_sort(self, key):
         self.Eink._send_command(0x24)
         if self.mode == BW2X:
             buf = bytearray()
-            for chunk in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, black_ram=True):
+            for chunk in draw.Drawable.draw_all(key, black_ram=True):
                 buf.extend(chunk)
             self.Eink._send_data(buf)
             self.Eink._send_command(0x26)
             self.Eink._send_data(buf)
         else:
             if self.ram_fl & 0b01:
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=full, black_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(key, black_ram=True):
                     self.Eink._send_data(ba)
             if self.ram_fl & 0b10:
                 draw.Drawable.second_color() if self.mode is G2B else None
                 draw.Drawable.reset() if self.ram_fl & 0b01 else None
                 self.Eink._send_command(0x26)
-                for ba in draw.Drawable.draw_all(self.Eink.width, self.Eink.height, full=full, red_ram=True, k=key):
+                for ba in draw.Drawable.draw_all(key, red_ram=True):
                     self.Eink._send_data(ba)
 
     def _ram_logic(self, obj, diff):
@@ -142,8 +145,9 @@ class DirectMode:
         self._ram_logic(d, diff)
 
     def show(self,full = False, flush = True, key = -1):
-        self._set_frame(full)
-        self._color_sort(full,key)
+        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
+        self._set_frame()
+        self._color_sort(key)
         self.Eink._updt_ctrl_2()
         self.Eink._ld_norm_lut() if not self.Eink._partial else self.Eink._ld_part_lut()
         self.Eink._send_command(0x20)
@@ -153,8 +157,8 @@ class DirectMode:
 
     def export(self, full = False, flush = True, key = -1, bw = True, red = False):
         """Returns the results of Drawable.draw_all in a buffer"""
-        buf_bw = (bytearray(b''.join(draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, black_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if bw else False
-        buf_red = (bytearray(b''.join(draw.Drawable.draw_all(self.Eink.width, self.Eink.height, key, full, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
+        buf_bw = (bytearray(b''.join(draw.Drawable.draw_all(key, black_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if bw else False
+        buf_red = (bytearray(b''.join(draw.Drawable.draw_all(key, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
 
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None
@@ -162,6 +166,7 @@ class DirectMode:
 
     def send_to_disp(self, full= False, flush = True, key = -1):
         """Function to send the current buffer to the display without triggering an update"""
+        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
         self._set_frame(full)
         self._color_sort(full, key)
         setattr(self, 'ram_fl', 0) if flush else None

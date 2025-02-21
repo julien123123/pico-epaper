@@ -9,7 +9,7 @@ class EPD2IN9(Eink):  # SSD1680
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 296
         self.ic_side = 128
-        self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
+        self._seqs = (0x03, 0x02, 0x00, 0x01)  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
 
     def _set_gate_nb(self):

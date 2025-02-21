@@ -14,7 +14,7 @@ def timed_function(f, *args, **kwargs):
     return new_func
 
 class Drawable:
-    hor = True #not sure how to define it in the main Eink class, but it makes more sense to make it a class variable
+    hor = True
     blkl = []
     whtl = []
     main_row_pointer = 0
@@ -30,21 +30,11 @@ class Drawable:
         return cls.yspan[1] - cls.yspan[0]
 
     @classmethod
-    def draw_all(cls, screen_w: int, screen_h: int, k: int = -1,  full: bool = False, background :int = 1, red_ram: bool = False, black_ram: bool = False)-> object:
+    def draw_all(cls,  k: int = -1, background :int = 1, red_ram: bool = False, black_ram: bool = False)-> object:
         key_m = (cls.k_none, cls.k_0, cls.k_1)
         if red_ram and black_ram:
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
-        if full:
-            cls.xspan = [0, screen_w//8-1]
-            cls.yspan = [0, screen_h-1]
-        else:
-            # making sure the span is within the screen
-            cls.xspan[0] = max(cls.xspan[0], 0)
-            cls.xspan[1] = min(cls.xspan[1], screen_w // 8-1)
-            cls.yspan[0] = max(cls.yspan[0], 0)
-            cls.yspan[1] = min(cls.yspan[1], screen_h-1)
-
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         background = 0xff if background else 0x00
         row_w = cls.c_width()+1
@@ -56,39 +46,41 @@ class Drawable:
             for obj in cls.blkl:
                 if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
                     first_x = max(0, obj.actual_x //8 - cls.xspan[0])
-                    key_m[k+1](row, next(obj._gen), first_x)
+                    nxt = next(obj._gen)
+                    key_m[k+1](row, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer += 1
             for obj in cls.whtl:
                 if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
                     first_x = max(0, obj.actual_x //8 - cls.xspan[0])
-                    key_m[k+1](row, next(obj._gen), first_x)
+                    nxt = next(obj._gen)
+                    key_m[k + 1](row, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer += 1
             cls.main_row_pointer += 1
             yield row
 
     @micropython.viper
     @staticmethod
-    def k_none(row: object, objline: object, first_x: int) -> ptr8:
-        for ind in range(int(len(objline))):
-            if int(first_x + ind) >= int(len(row)):
+    def k_none(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        for ind in range(lenob):
+            if int(first_x + ind) >= lenro:
                 break
-            row[first_x + ind] = int(objline[ind])
+            row[first_x + ind] = objline[ind]
 
     @micropython.viper
     @staticmethod
-    def k_0(row: object, objline: object, first_x: int) -> ptr8:
-        for ind in range(int(len(objline))):
-            if int(first_x + ind) >= int(len(row)):
+    def k_0(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        for ind in range(lenob):
+            if int(first_x + ind) >= lenro:
                 break
-            row[first_x + ind] = int(row[first_x + ind]) & int(objline[ind])
+            row[first_x + ind] = int(row[first_x + ind]) & objline[ind]
 
     @micropython.viper
     @staticmethod
-    def k_1(row: object, objline: object, first_x: int) -> ptr8:
-        for ind in range(int(len(objline))):
-            if int(first_x + ind) >= int(len(row)):
+    def k_1(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        for ind in range(lenob):
+            if int(first_x + ind) >= lenro:
                 break
-            row[first_x + ind] = int(row[first_x + ind]) | int(objline[ind])
+            row[first_x + ind] = row[first_x + ind] | objline[ind]
 
     @classmethod
     def flush(cls):
@@ -112,6 +104,18 @@ class Drawable:
             obj.cc = obj.c >> 1 & 1
         for obj in cls.whtl:
             obj.cc = obj.c >> 1 & 1
+
+    @classmethod
+    def set_span(cls, screen_w, screen_h, full):
+        if full:
+            cls.xspan = [0, screen_w//8-1]
+            cls.yspan = [0, screen_h-1]
+        else:
+            # making sure the span is within the screen
+            cls.xspan[0] = max(cls.xspan[0], 0)
+            cls.xspan[1] = min(cls.xspan[1], screen_w // 8-1)
+            cls.yspan[0] = max(cls.yspan[0], 0)
+            cls.yspan[1] = min(cls.yspan[1], screen_h-1)
 
     # BASIC DRAWABLE CLASS TO BE INHERITED BY ALL OTHER CLASSES
 
@@ -247,13 +251,15 @@ class StrLine(Drawable):
                 fline[-1] = 0xff if self.cc else 0x00
         if len(fline) > 2:
             fline[1:-1] = bytearray([0xff if self.cc else 0x00] * len(fline[1:-1]))
-        yield fline if Drawable.hor else reverse_bits(fline)
+        reverse_bits(fline, len(fline)) if not Drawable.hor else None
+        yield fline
 
     def sqr_l(self) -> object:
         # lines perpendicular to the display bytes
         for i in range(self.span):
             b = bytearray([1 << (7-self.shift)]) if self.cc else bytearray([0xff ^ (1 << (7-self.shift))])
-            yield b if Drawable.hor else reverse_bits(b)
+            reverse_bits(b, len(b)) if not Drawable.hor else None
+            yield b
 
     def draw(self):
         yield from self.fn
@@ -322,7 +328,8 @@ class ABLine(Drawable):
                         bline[pt // 8] = bline[pt // 8] | 1 << (pt % 8) if self.cc else bline[pt // 8] ^ 1 << (pt % 8)
                     else:
                         bline[pt//8] = bline[pt // 8] | 1 << ( 7 - ( pt % 8 )) if self.cc else bline[pt//8] ^ 1 << ( 7 - ( pt % 8 ))
-                yield reverse_bits(bline)
+                reverse_bits(bline, len(bline))
+                yield bline
 
 
 class Rect(Drawable):
@@ -364,19 +371,20 @@ class Rect(Drawable):
 
         if len(fline) > 2:
             fline[1:-1] = bytearray([0xff if self.cc else 0x00] * len(fline[1:-1]))
-
-        yield fline if Drawable.hor else reverse_bits(fline)
+        #reverse_bits(fline, len(fline)) if not Drawable.hor else None
+        yield fline
         if not self.f and mid:
             line = bytearray([0x00 if self.cc else 0xff]*bwidth)
             line[0] = line[0] | 1 << (7-self.shift) if self.cc else line[0] ^ 1 << (7-self.shift)
             line[-1] = line[-1] | 1 << (7-(self.rem-1)%8) if self.cc else line[-1] ^ 1 << (7-(self.rem-1)%8)
 
             for i in range(mid):
-                yield line if Drawable.hor else reverse_bits(line)
+                #reverse_bits(line, len(line)) if not Drawable.hor else None
+                yield line
         else:
             for i in range(mid):
-                yield fline if Drawable.hor else reverse_bits(fline)
-        yield fline if Drawable.hor else reverse_bits(fline)
+                yield fline
+        yield fline
 
 
 class Ellipse(Drawable):
@@ -566,9 +574,11 @@ class ChainBuff(Drawable): #mainly for writing fonts
                 w = unpack('H', self.w_l[e*2:e*2+2])[0]
                 delta = self.fixed_w - w if self.fixed_w else 0
                 for line in l_by_l(elem, self.font.height(), w):
-                    if self.invert:
-                        line = self.invert_bytes(line)
-                    yield line if not self.shift else shiftl(line, self.shift)
+
+                    line = shiftl(line, len(line), self.shift) if self.shift else line
+                    invert_bytes(line, len(line)) if self.invert else None
+                    reverse_bits(line, len(line))
+                    yield line
 
                 if bool(self.spacing + delta ) & bool(e < len(self.chr_l) -1 ):
                     for _ in range(self.spacing + delta):
@@ -583,22 +593,19 @@ class ChainBuff(Drawable): #mainly for writing fonts
             if dx>0:
                 cursor += int(self.spacing)
                 if cursor%8:
-                    row:object = shiftr(lines, cursor%8)
+                    row:object = shiftr(lines, len(lines), cursor%8)
                     first:int = int(cursor)//8
                     r[first] = int(r[first]) | int(row[0]) # This works for font_to_py fonts, but might not for other fonts
                     r[first+1:first+int(len(row))] = row[1:]
                 else:
                     r[cursor//8:cursor//8+int(len(lines))] = lines[:]
             else:
-                row:object = shiftr(lines, self.shift) if self.shift else lines
+                row:object = shiftr(lines, len(lines), self.shift) if self.shift else lines
                 r[0:int(len(row))] = row[:]
             cursor += width if not self.fixed_w else self.fixed_w
-        ba: object = r if not self.invert else self.invert_bytes(r)
-        return ba
-    #@micropython.viper
-    @staticmethod
-    def invert_bytes(ba: object) -> object:
-        return bytearray(~b & 0xFF for b in ba)
+        invert_bytes(r, len(r)) if self.invert else None # Invert the bytes in r object, no need to create a new one
+        #reverse_bits(r, len(r))
+        return r
 
     def reset_draw(self):
         self.chr_l = []
@@ -628,7 +635,8 @@ class Prerendered(Drawable):
         pass
 
     def draw(self):
-        yield shiftr(l_by_l(self.buff, self.w, self.h), self.shift) if Drawable.hor  else shiftr(l_by_l(self.buff, self.h, self.w), self.shift)
+        r = l_by_l(self.buff, self.w, self.h) if Drawable.hor else l_by_l(self.buff, self.h, self.w)
+        yield shiftr(r, len(r), self.shift)
 
 @micropython.native
 def l_by_l(buf, w, h):
@@ -636,15 +644,18 @@ def l_by_l(buf, w, h):
     for i in range(h):
         yield buf[i*width:i*width+width]
 
+#--------------------------------------------------------------
+# Bit/Byte manipulation functions
+#--------------------------------------------------------------
+
 @micropython.viper
-def shiftr( ba: object, val: int) -> object:
+def shiftr( ba: ptr8, lenba:int, val: int) -> object:
     if val <0:
         raise ValueError('Number of bits must be positive')
     if val == 0:
-        return ba
+        return object(ba)
     byteshift = val//8
     bitshift = val % 8
-    lenba = int(len(ba))
     result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
     carry = 0
     for i in range(lenba):
@@ -655,14 +666,13 @@ def shiftr( ba: object, val: int) -> object:
     return result
 
 @micropython.viper
-def shiftl(ba:object, val:int) -> object:
+def shiftl(ba:ptr8, lenba:int, val:int) -> object:
     if val < 0:
         raise ValueError('Number of bits must be positive')
     if val == 0:
-        return ba
+        return object(ba)
     byteshift = val // 8
     bitshift = val % 8
-    lenba = int(len(ba))
     result = bytearray(lenba + byteshift + (1 if bitshift > 0 else 0))
     carry = 0
     for i in range(lenba):
@@ -673,11 +683,14 @@ def shiftl(ba:object, val:int) -> object:
     return result
 
 @micropython.viper
-def reverse_bits(ba: object) -> object:
-    r = bytearray(int(len(ba)))
-    for i in range(int(len(ba))):
-        r[i] = REVERSE_LUT[int(ba[i])]
-    return r
+def reverse_bits(ba: ptr8, lenba:int) -> ptr8:
+    for i in range(lenba):
+        ba[i] = int(REVERSE_LUT[ba[i]])
+
+@micropython.viper
+def invert_bytes(ba:ptr8, lenba:int)->ptr8:
+    for i in range(lenba):
+        ba[i] = 255 - ba[i]  # equivalent to NOT operation because did not work on Esp32
 
 def grid_print(row: list):
     """ For testing purposes """
@@ -705,13 +718,15 @@ REVERSE_LUT = b'\x00\x80\x40\xc0\x20\xa0\x60\xe0\x10\x90\x50\xd0\x30\xb0\x70\xf0
               b'\x0f\x8f\x4f\xcf\x2f\xaf\x6f\xef\x1f\x9f\x5f\xdf\x3f\xbf\x7f\xff'
 
 if __name__ is '__main__':
-    import numr110V, freesans20V
+    import numr110H, freesans20, numr110V, freesans20V
     Drawable.hor = False
-    br = ABLine(0,0, 30, 10, 0)
-    br.ram_flag = 1
-    #txt = ChainBuff("Allo", freesans20V, 0, 0, False, False, 0, invert = False)
-    #txt.ram_flag = 1
-    #t= ChainBuff("33", numr110V, 4, 48, False, 0, invert = True)
+    smol = freesans20 if Drawable.hor else freesans20V
+    big = numr110H if Drawable.hor else numr110V
+    #br = ABLine(0,0, 30, 10, 0)
+    #br.ram_flag = 1
+    txt = ChainBuff("Allo", smol, 4, 3, False, False, 0, invert = True)
+    txt.ram_flag = 1
+    #t= ChainBuff("33", big, 4, 48, False, False, invert = True)
     #t.ram_flag = 1
     #p = Pixel(90, 5, 0)
     #p.ram_flag = 1
@@ -719,9 +734,10 @@ if __name__ is '__main__':
     #lll.ram_flag = 1
     #ln = Rect(19, 10, 10, 20, 0, False)
     #ln.ram_flag = 1
-    #lin= StrLine(0, 0,20, 0, 'h')
+    #lin= StrLine(10, 60,20, 0, 'h')
     #lin.ram_flag = 1
-    d = Drawable.draw_all(100,100, full= False, black_ram = True)
+    Drawable.set_span(50,50, True)
+    d = Drawable.draw_all(black_ram = True, k=0)
     #d = t.draw()
     for i in d:
-        grid_print(i) if Drawable.hor else grid_print(reversed(i))
+        grid_print(i) if Drawable.hor else grid_print(i)

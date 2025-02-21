@@ -76,7 +76,7 @@ class EPDPico(Eink):  # SSD1677
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 480
         self.ic_side = 280
-        self._seqs = (0x03, 0x02, 0x01, 0x01)  # structure ( 0°, 90°, 180°, 270°)
+        self._seqs = (0x03, 0x02, 0x00, 0x01)  # structure ( 0°, 90°, 180°, 270°)
         self._luts = (EPD_3IN7_lut_4Gray_GC,
                       EPD_3IN7_lut_1Gray_GC,
                       EPD_3IN7_lut_1Gray_DU,
@@ -128,19 +128,20 @@ if __name__ == "__main__":
     
     p = Pin(2, Pin.OUT)  # To restet the epd
     epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None)  # SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-    epd = EPDPico(rotation=0, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
+    epd = EPDPico(rotation=180, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
     #epd.clear()
     import core.draw_modes as md
     from core.draw import Drawable as DR
-    import numr110
-
+    import numr110, numr110V, Notorc25
+    
+    big = numr110 if not epd._sqr else numr110V
+    smol = Notorc25
+    
     epd.draw.rect(0,0, 50, 50, f=True)
     epd.show(full=True)
-
+    
     #epd(2, True, True, True)
-    #epd.draw.text('33', numr110, 0, 0, c=1)
-    # False alert, there is still a problem when stuff gets too close to the border on that display.
-    for i in range(8):
-        epd.draw.rect(80+i, 10+i*62, 60, 60, f=True)
+    epd.draw.text('33', big, 0, 0, c=1)
+    epd.draw.text('salut', smol, 100, 100)
     epd.show(full = True, key=0)
     epd.sleep()

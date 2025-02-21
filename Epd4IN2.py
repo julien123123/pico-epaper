@@ -12,7 +12,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 300
         self.ic_side = 400
-        self._seqs = (0x03, 0x06, 0x00, 0x05)  # structure ( 0°, 90°, 180°, 270°) 3605 pour framebuf = parfait
+        self._seqs = (0x03, 0x01, 0x00, 0x02)  # structure ( 0°, 90°, 180°, 270°) 3605  framebuf | DirectDraw (3102)
         #self.x2 = True
         super().__init__(spi, *args, **kwargs)
 
@@ -38,21 +38,25 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def _updt_ctrl_2(self):
         # Set Display Update Control 2 / loading LUTs
         if not self._partial:
-            self._send(0x22, 0xf7) #if not self.monoc else self._send(0x22, 0xcf)
+            self._send(0x22, 0xf7) 
         else:
             #self._send(0x1A, 0x6E)
             self._send(0x22, 0xff)
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
-    import numr110H, numr110V, freesans20, time
+    import numr110H, numr110V, freesans20, freesans20V, time
     from core.draw import Drawable as DR
-    
+
+
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
-    epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
-    
-    epd.draw.text('3', numr110H, 0, 0, c = 1)
+    epd = EPD4IN2(rotation=270, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
+
+    big = numr110H if not epd._sqr else numr110V
+    smol = freesans20 if not epd._sqr else freesans20V
+
+    epd.draw.text('3', big, 230, 208, c = 1)
     epd.draw.rect(350,250,50,50)
     epd.show()
     epd.draw.ellipse(10,10, 40, 100)
@@ -60,27 +64,30 @@ if __name__ == "__main__":
     epd(2, bw= True, partial=True)
     manx = 6
     k=0
-    epd.draw.rect(220, 30, 40, 40, f=True, c = 0)
-    epd.draw.text('42:48', numr110H, manx,100)
-    epd.draw.text(' Mercredi 20 dec 2025', freesans20, manx,2, c=1)
+    epd.draw.rect(100, 60, 40, 40, f=True, c = 0)
+    epd.draw.pixel(10,10)
+    epd.draw.text('42:48', big, manx,80)
+    epd.draw.text(' Mercredi 20 dec 2025', smol, manx,10, c=1)
 
-    epd.draw.ellipse(43, 30, 79, 80, f= False)
+    epd.draw.ellipse(43, 30, 79, 80, f= False) if not epd._sqr else None
 
     epd.draw.show(key=k)
     epd(1, True, False, False)
     epd.sleep()
-    
+
     # Yup, we are sleeping babe
     epd.reinit()
     epd(2, bw=True, partial = True, pingpong = True)
 
-    epd.draw.text('42:48', numr110H, manx,100, diff=True)
-    epd.draw.text('22:45', numr110H, manx,100)
+    epd.draw.text('42:48', big, manx,80, diff=True)
+    epd.draw.text('22:45', big, manx,80)
     epd.draw.show(key=k)
-    epd.draw.text('WN:DW', numr110H, manx, 100)
+    epd.draw.text('WN:DW', big, manx, 80)
     epd.draw.show(key=k)
     epd.show_ram()
     epd(1, partial=False)
+    #epd.show(True, key =0)
+    #epd.show(key = 0)
     epd.sleep()
 
  
