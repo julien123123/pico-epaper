@@ -134,14 +134,14 @@ class DirectMode:
         #c = self.Eink.black if not c else c
         #pass
 
-    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True):
+    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True, v_rev = True):
         #x y are always at the top left of the text line
         c = self.Eink.black if not c else c
-        d = draw.ChainBuff(text, font, x, y, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert)
+        d = draw.ChainBuff(text, font, x, y, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert, v_rev=v_rev)
         self._ram_logic(d, diff)
 
-    def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False):
-        d = draw.Prerendered(x, y, h, w, buf, 1)
+    def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False, reverse = False):
+        d = draw.Prerendered(x, y, h, w, buf, 1, invert=invert, reverse=reverse)
         self._ram_logic(d, diff)
 
     def show(self,full = False, flush = True, key = -1):
@@ -157,6 +157,7 @@ class DirectMode:
 
     def export(self, full = False, flush = True, key = -1, bw = True, red = False):
         """Returns the results of Drawable.draw_all in a buffer"""
+        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
         buf_bw = (bytearray(b''.join(draw.Drawable.draw_all(key, black_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if bw else False
         buf_red = (bytearray(b''.join(draw.Drawable.draw_all(key, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
 
@@ -167,7 +168,7 @@ class DirectMode:
     def send_to_disp(self, full= False, flush = True, key = -1):
         """Function to send the current buffer to the display without triggering an update"""
         draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
-        self._set_frame(full)
-        self._color_sort(full, key)
+        self._set_frame()
+        self._color_sort(key)
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None

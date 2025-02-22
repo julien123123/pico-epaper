@@ -128,7 +128,7 @@ if __name__ == "__main__":
     
     p = Pin(2, Pin.OUT)  # To restet the epd
     epdSPI = SPI(2, sck=Pin(12), baudrate=400000, mosi=Pin(13), miso=None)  # SPI instance fpr E-paper display (miso Pin necessary for SoftSPI, but not needed)
-    epd = EPDPico(rotation=180, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
+    epd = EPDPico(rotation=90, spi=epdSPI, cs_pin=Pin(10), dc_pin=Pin(9), reset_pin=p, busy_pin=Pin(11))  # Epaper setup (instance of EINK)
     #epd.clear()
     import core.draw_modes as md
     from core.draw import Drawable as DR
@@ -141,7 +141,8 @@ if __name__ == "__main__":
     epd.show(full=True)
     
     #epd(2, True, True, True)
-    epd.draw.text('33', big, 0, 0, c=1)
+    epd.draw.text('34533', big, 5, 0, c=1)
+    epd.draw.text('34533', big, 5, 120, c=1)
     epd.draw.text('salut', smol, 100, 100)
-    epd.show(full = True, key=0)
+    epd.show(key=0, clear = True)
     epd.sleep()

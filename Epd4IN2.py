@@ -1,3 +1,5 @@
+import framebuf
+
 from core.Eink import Eink
 from ustruct import pack
 
@@ -47,11 +49,12 @@ if __name__ == "__main__":
     from machine import Pin, SPI
     import numr110H, numr110V, freesans20, freesans20V, time
     from core.draw import Drawable as DR
+    import framebuf as fb
 
 
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
-    epd = EPD4IN2(rotation=270, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
+    epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
 
     big = numr110H if not epd._sqr else numr110V
     smol = freesans20 if not epd._sqr else freesans20V
@@ -69,7 +72,8 @@ if __name__ == "__main__":
     epd.draw.text('42:48', big, manx,80)
     epd.draw.text(' Mercredi 20 dec 2025', smol, manx,10, c=1)
 
-    epd.draw.ellipse(43, 30, 79, 80, f= False) if not epd._sqr else None
+    epd.draw.ellipse(100, 70, 79, 80, f= True)
+    print(DR.blkl[-1].height)
 
     epd.draw.show(key=k)
     epd(1, True, False, False)
@@ -88,6 +92,13 @@ if __name__ == "__main__":
     epd(1, partial=False)
     #epd.show(True, key =0)
     #epd.show(key = 0)
+    epd.reinit()
+    cd = bytearray((50+7)*50//8)
+    f = fb.FrameBuffer(cd, 50, 50, framebuf.MONO_HLSB)
+    f.fill(1)
+    f.text('salut', 0, 0, 0)
+    epd.draw.blit(20,30, cd, 50, 50)
+    epd.show(clear=True)
     epd.sleep()
 
  

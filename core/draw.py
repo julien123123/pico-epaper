@@ -389,8 +389,8 @@ class Rect(Drawable):
 
 class Ellipse(Drawable):
     def __init__(self,xradius, yradius, x, y, color, f = False, m = 0b1111):
-        self.xr = xradius
-        self.yr = yradius
+        self.xr = xradius if Drawable.hor  else yradius
+        self.yr = yradius if Drawable.hor  else xradius
         self.fill = f
         self.m = m
         super().__init__(x, y, color)
@@ -399,15 +399,21 @@ class Ellipse(Drawable):
 
     @property
     def width(self):
-        return 2*self.xr+1 if Drawable.hor  else 2*self.yr+1
-
+        return 2*self.xr+1
     @property
     def height(self):
-        return 2*self.yr+1 if Drawable.hor  else 2*self.xr+1
+        return 2*self.yr+1
 
     def setup(self):
-        """:returns a list of lists of points where y is the index of the list"""
-        points = [[] for _ in range(2 * self.yr + 1)]
+        # Create a bytearray for the points LUT, each byte represents 8 pixels
+        points = bytearray((2 * self.yr + 1) * ((2 * self.xr + 8) // 8))
+
+        def set_point(y_idx, x_pos):
+            # Convert x,y coordinates to bit position in bytearray
+            row_bytes = (2 * self.xr + 8) // 8
+            byte_idx = y_idx * row_bytes + (self.xr + x_pos) // 8
+            bit_pos = 7 - ((self.xr + x_pos) % 8)  # MSB first
+            points[byte_idx] |= (1 << bit_pos)
 
         def in_quadrant(px, py, quadrant_mask):
             if px >= 0 and py <= 0:  # Q1 (top-right)
@@ -435,19 +441,19 @@ class Ellipse(Drawable):
                 # Fill horizontal line between points
                 for px in range(-x, x + 1):
                     if in_quadrant(px, y, self.m):
-                        points[self.yr - y].append(self.xr + px)
+                        set_point(self.yr - y, px)
                     if in_quadrant(px, -y, self.m):
-                        points[self.yr + y].append(self.xr + px)
+                        set_point(self.yr + y, px)
             else:
                 # Draw boundary points
                 if in_quadrant(x, y, self.m):
-                    points[self.yr - y].append(self.xr + x)
+                    set_point(self.yr - y, x)
                 if in_quadrant(-x, y, self.m):
-                    points[self.yr - y].append(self.xr - x)
+                    set_point(self.yr - y, -x)
                 if in_quadrant(x, -y, self.m):
-                    points[self.yr + y].append(self.xr + x)
+                    set_point(self.yr + y, x)
                 if in_quadrant(-x, -y, self.m):
-                    points[self.yr + y].append(self.xr - x)
+                    set_point(self.yr + y, -x)
 
             if d1 < 0:
                 x += 1
@@ -467,19 +473,19 @@ class Ellipse(Drawable):
                 # Fill horizontal line between points
                 for px in range(-x, x + 1):
                     if in_quadrant(px, y, self.m):
-                        points[self.yr - y].append(self.xr + px)
+                        set_point(self.yr - y, px)
                     if in_quadrant(px, -y, self.m):
-                        points[self.yr + y].append(self.xr + px)
+                        set_point(self.yr + y, px)
             else:
                 # Draw boundary points
                 if in_quadrant(x, y, self.m):
-                    points[self.yr - y].append(self.xr + x)
+                    set_point(self.yr - y, x)
                 if in_quadrant(-x, y, self.m):
-                    points[self.yr - y].append(self.xr - x)
+                    set_point(self.yr - y, -x)
                 if in_quadrant(x, -y, self.m):
-                    points[self.yr + y].append(self.xr + x)
+                    set_point(self.yr + y, x)
                 if in_quadrant(-x, -y, self.m):
-                    points[self.yr + y].append(self.xr - x)
+                    set_point(self.yr + y, -x)
 
             if d2 > 0:
                 y -= 1
@@ -497,19 +503,19 @@ class Ellipse(Drawable):
     @micropython.native
     def draw(self):
         points = self.setup()
+        row_bytes = (2 * self.xr + 8) // 8
         bkgrd = 0 if self.cc else 0xff
-        byte_width = (self.width + 7) // 8
-        for x_points in points:
-            if x_points:
-                bline = bytearray([bkgrd] * byte_width)
-                for pt in x_points:
-                    bline[pt // 8] = bline[pt // 8] | (1 << (7 - (pt % 8))) if self.cc else bline[pt//8] ^ (1 << (7-(pt%8)))
+        for y in range(2 * self.yr + 1):
+            row = points[y * row_bytes:(y + 1) * row_bytes]
+            if any(row):  # Only yield rows that contain points
+                bline = bytearray(row)
+                if not self.cc:  # Invert the bits if needed
+                    invert_bytes(bline, len(bline))
                 yield bline
-
 
 class ChainBuff(Drawable): #mainly for writing fonts
     """ajouter implémentation de fixed width pour vertical"""
-    def __init__(self, st, font, x, y, spacing = 2, fixed_w = False, color = 0, invert = True):
+    def __init__(self, st, font, x, y, spacing = 2, fixed_w = False, color = 0, invert = True, v_rev = True):
         super().__init__(x, y, color)
         self.st = st
         self.spacing = spacing
@@ -518,6 +524,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
         self.chr_l = []
         self.w_l = bytearray()
         self.invert = invert
+        self.v_rev = v_rev # revert when vertical
 
         if self.fixed_w and self.fixed_w < self.font.max_width():
             raise ValueError(f"fixed_width should be equal to or greater than the font's max_width, use 'max' to use that value instead")
@@ -569,15 +576,17 @@ class ChainBuff(Drawable): #mainly for writing fonts
                     args.append(line)
                 yield self.linec(*args)
         else: # Vertical
+            # Seems that since the char buffers are a memoryview, if the letters are not shifted, the only need to be
+            # reverted and reversed once. If the same letter comes up again, it will be reverted and reversed again
+
             bkg = 0 if self.cc else 0xff
             for e, elem in enumerate(self.chr_l):
                 w = unpack('H', self.w_l[e*2:e*2+2])[0]
                 delta = self.fixed_w - w if self.fixed_w else 0
                 for line in l_by_l(elem, self.font.height(), w):
-
-                    line = shiftl(line, len(line), self.shift) if self.shift else line
+                    line = shiftl(line, len(line), self.shift) if self.shift else bytearray(line)
                     invert_bytes(line, len(line)) if self.invert else None
-                    reverse_bits(line, len(line))
+                    reverse_bits(line, len(line)) if self.v_rev else None
                     yield line
 
                 if bool(self.spacing + delta ) & bool(e < len(self.chr_l) -1 ):
@@ -614,13 +623,15 @@ class ChainBuff(Drawable): #mainly for writing fonts
 
 
 class Prerendered(Drawable):
-    def __init__(self, x, y, h, w, buff, color):
+    def __init__(self, x, y, h, w, buff, color, invert = False, reverse = False):
         super().__init__(x, y, color)
         self.buff = buff
         self.h = h
         self.w = w
         self.setup()
-        self.rem = (self.w - self.shift) % 8 if Drawable.hor  else (self.h - self.shift) % 8
+        self.rem = (self.w + self.shift) % 8 if Drawable.hor  else (self.h + self.shift) % 8
+        self.inv = invert
+        self.rev = reverse
         self._parse()
 
     @property
@@ -636,7 +647,10 @@ class Prerendered(Drawable):
 
     def draw(self):
         r = l_by_l(self.buff, self.w, self.h) if Drawable.hor else l_by_l(self.buff, self.h, self.w)
-        yield shiftr(r, len(r), self.shift)
+        for ln in r:
+            invert_bytes(ln, len(ln)) if self.inv else None
+            reverse_bits(ln, len(ln)) if self.rev else None
+            yield shiftr(ln, len(ln), self.shift) if self.shift and Drawable.hor else shiftl(ln, len(ln), self.shift) if self.shift and not Drawable.hor else ln
 
 @micropython.native
 def l_by_l(buf, w, h):
@@ -718,19 +732,30 @@ REVERSE_LUT = b'\x00\x80\x40\xc0\x20\xa0\x60\xe0\x10\x90\x50\xd0\x30\xb0\x70\xf0
               b'\x0f\x8f\x4f\xcf\x2f\xaf\x6f\xef\x1f\x9f\x5f\xdf\x3f\xbf\x7f\xff'
 
 if __name__ is '__main__':
-    import numr110H, freesans20, numr110V, freesans20V
-    Drawable.hor = False
+    import numr110H, freesans20
+    #import numr110V, freesans20V
+    Drawable.hor = True
+
+    smile = bytearray([0xf0, 0xff, 0x00, 0x18, 0x00, 0x01, 0x0c, 0x00, 0x02, 0x04, 0x00, 0x06,
+        0x02, 0x00, 0x04, 0xc3, 0x60, 0x04, 0x41, 0x20, 0x04, 0x01, 0x00, 0x08,
+        0x01, 0x00, 0x08, 0x03, 0x06, 0x08, 0x12, 0x80, 0x08, 0x22, 0x40, 0x0c,
+        0x42, 0x40, 0x04, 0xc4, 0x20, 0x06, 0x84, 0x19, 0x02, 0x08, 0x0e, 0x01,
+        0x10, 0xc0, 0x00, 0x30, 0x60, 0x00, 0xe0, 0x18, 0x00, 0x80, 0x0f, 0x00])
+
+    sm = Prerendered(5,10,20,20, smile, 1, invert = True, reverse = True)
+    sm.ram_flag = 1
     smol = freesans20 if Drawable.hor else freesans20V
     big = numr110H if Drawable.hor else numr110V
     #br = ABLine(0,0, 30, 10, 0)
     #br.ram_flag = 1
     txt = ChainBuff("Allo", smol, 4, 3, False, False, 0, invert = True)
-    txt.ram_flag = 1
+    #txt.ram_flag = 1
     #t= ChainBuff("33", big, 4, 48, False, False, invert = True)
     #t.ram_flag = 1
     #p = Pixel(90, 5, 0)
     #p.ram_flag = 1
-    #lll = Ellipse(20, 10, 7,0, 0,False, 15)
+    lll = Ellipse(20, 20, 7,0, 0,False, 0b1011)
+    #print(lll.setup2())
     #lll.ram_flag = 1
     #ln = Rect(19, 10, 10, 20, 0, False)
     #ln.ram_flag = 1

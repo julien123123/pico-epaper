@@ -15,20 +15,27 @@ The display specific files probably have an example of what is currently working
 
 ### Here's the rest of the normal readme:
 
-This module is a basic driver for Waveshare [Pico e-Paper 3.7 display](https://www.waveshare.com/wiki/Pico-ePaper-3.7).
-It supports grayscale mode and allows setting screen rotation. Drawing routines are compatible with
-[MicroPython FrameBuffer](https://docs.micropython.org/en/latest/library/framebuf.html) class, which means the same
-method names and arguments they require (**blit()** being a slight exception - see below for details).
+This module is a basic Micropython driver for GoodDisplay e-paper Displays often used by Waveshare, WeAct Studio, and others.
+It supports grayscale mode, partial updates and allows setting screen rotation. My goal doing this was to support as much
+options given by the driver chips as possible to the user. Along with the driver, this module also
+provides a simple drawing API that can be used to draw basic shapes and text on the screen that makes use of the on display
+ram, and micrypython's viper mode. This allows for faster drawing times, and drawing the display asynchronously. In addition,
+you may still use the FrameBuffer class to draw on the display.
 
-There are two classes in this module:
-1. Eink - uses SPI for communication with the display, can be used with devices other than RP2040.
-2. EinkPIO - uses one State Machine and DMA channel to communicate with the display.
+Here are the currently supported displays:
+- 1.54" 200x200 with SSD1681 driver / GDEW0154M09
+- 2.9" 296x128 with SSD1680 driver GDEH029A1
+- 3.7" 540x960 with SSD1677 driver GDEW0371W7
+- 4.2" 400x300 with SSD1683 driver GDEW042T2
 
-Both classes offer the same functionality and the only difference is the optional parameters in the constructor they take.
+*If your display is not listed, you can try to use the driver for the closest resolution and driver. It may work, but it 
+may not. Using the other epd files as a reference, you can try to make your own driver.
+
+Also, I have only tested this module on ESP-32s, and RP2040, the library may not work as expected on other ports.
 
 ---
 
-## Note 
+## Note  **This is currently being evaluated
 **show()** method takes considerably longer for rotations 90 and 270, than 0 and 180 (~700 ms vs 80 ms). This is normal and
 is a result of additional data processing required before sending buffers to the screen in landscape mode.
 There's also a significant memory overhead associated with the processing.
@@ -39,20 +46,10 @@ There's also a significant memory overhead associated with the processing.
 ## Constructors
 **Eink(rotation=0, spi=None, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, monochrome=True)**
 
-Constructors for these classes take multiple optional arguments that allow setting desired rotation as well as custom
-pin assignments.
-
 Accepted values for rotation are: 0, 90, 180 and 270. Supplying unaccepted value will result in an error. The default
 value is 0, i.e. screen is horizontal with USB connector facing upwards.
 
-**Eink** class takes additional _spi_ argument that allows setting custom SPI object to be used, if not set it defaults
-to SPI(1, baudrate=20_000_000).
-
-By default, Pins setup reflects usage of the e-Paper display as a shield for Raspberry Pi Pico, but the user
-can supply custom configuration for use with different boards and microcontrollers (tested with ESP-WROOM-32).
-
-The optional parameter **use_partial_buffer** can be set to _True_ to use separate buffer for partial refreshes.
-Otherwise, the BW buffer is used in partial mode.
+_spi_ argument that allows setting custom SPI object to be used
 
 ---
 
@@ -151,7 +148,7 @@ Additionally, the module has DirectDraw which is very similar to drawing methods
 > [!TIP]
 > For faster rendering time, you can pre-invert the colour of your fonts, and pre-invert the bytes if your font is vertical.
 
-10. blit(fbuf, x, y, key=-1, palette=None, ram=RAM_RBW)
+10. blit(fbuf, x, y, key=-1, ram=RAM_RBW, reverse = False, invert = False)
 - `blit` will just send a pre-rendered buffer directly to the display
 - This is the method you want to use if you need to use 'framebuf.Framebuffer'. You can create a FrameBuffer object, send it with blit, and use the 'show()' method to display it.
 

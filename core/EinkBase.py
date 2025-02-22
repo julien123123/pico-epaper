@@ -86,25 +86,6 @@ class EinkBase:
     def _set_window(self, start_x, end_x, start_y, end_y):
         self._send(0x44, pack(self.x_set, start_x, end_x))
         self._send(0x45, pack("2h", start_y, end_y))
-
-    def _set_frame(self, disp_x=0):
-        '''
-        sets the window according to the origin point of the display mode; uses absolute display ram addresses
-        :param disp_x = position of the buffer in the x space from the upper left corner when display is at 0 rotation
-        left most bit (horizontal/vertical) is ignored
-        '''
-        x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
-        if self.cur_seq & 0b11 == 0: #bottom left
-            self._set_window(self._virtual_width(x + disp_x) - 1, max(self._virtual_width(disp_x) -1, 0), y-1, 0)
-        elif self.cur_seq & 0b11 == 1: #bottom right
-            self._set_window(0 + self._virtual_width(disp_x), self._virtual_width(x+disp_x)- 1, y-1, 0)
-        elif self.cur_seq & 0b11 == 2: #top right
-            self._set_window(self._virtual_width(x+disp_x)- 1, self._virtual_width(disp_x), 0, y - 1)
-        elif self.cur_seq & 0b11 == 3: #top left
-            self._set_window(0 + self._virtual_width(disp_x), self._virtual_width(x+disp_x) - 1, 0, y - 1 )
-        else:
-            raise ValueError(f'Incorrect rotation or display mode selected')
-
         self.wndw_set = True
 
     def _init_disp(self):
@@ -136,7 +117,6 @@ class EinkBase:
 
         self._set_VCOM()
 
-        #self.opmode() causes problems if inited at the begining like that
         self._sort_ram()
         self.inited = True
 
@@ -219,17 +199,6 @@ class EinkBase:
         """Public method for screen reinitialisation."""
         self._init_disp()
 
-    def zero(self, abs_x=0, abs_y=0, lut=0):
-        """Pointing the zero of the buffer in absolute display coordinate"""
-        x, y = (self.width, self.height) if not self._sqr else (self.height, self.width)
-        if self.cur_seq & 0b11 == 0: #bottom right
-            self._set_cursor(self._virtual_width(x)-1, y-1) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(x-abs_x)-1, y - abs_y -1)
-        elif self.cur_seq & 0b11 == 1: #bottom left
-            self._set_cursor(0,y-1) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(abs_x)-1, y-abs_y-1)
-        elif self.cur_seq & 0b11 == 2: #top right
-            self._set_cursor(self._virtual_width(x)-1, 0) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(x-abs_x) -1, abs_y - 1)
-        else: # Top left
-            self._set_cursor(0,0) if not (abs_x or abs_y) else self._set_cursor(self._virtual_width(abs_x) -1, abs_y - 1)
 
     def sleep(self, ram_on = False):
         self._send(0x10, 0x03) if ram_on == False else self._send(0x10, 0x01)

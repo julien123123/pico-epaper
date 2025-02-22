@@ -50,7 +50,7 @@ if __name__ == "__main__":
     
     p= Pin(15, Pin.OUT)
     epdSPI = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None)
-    epd = EPD1IN54(rotation=270, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16))
+    epd = EPD1IN54(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=p, busy_pin=Pin(16))
     #epd.clear()
     
     big = numr110H if not epd._sqr else numr110V
@@ -67,6 +67,13 @@ if __name__ == "__main__":
     epd.draw.text('19', big, 20, 16, diff=True, c=1)
     epd.draw.text('WW', big, 20, 20, c=1)
     epd.show(True)
+
+    epd(1, True,False, False)
+    epd.reinit()
+    import fantasmagorie as f
+    epd.draw.blit(10,0, f.fantasmagorie,f.width,  f.height, reverse= True, invert = True)
+    epd.show(clear=True)
+
     epd.sleep()
     
     print(epd._abs_xy(0, 0))
