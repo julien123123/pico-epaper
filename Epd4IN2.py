@@ -58,10 +58,19 @@ if __name__ == "__main__":
 
     big = numr110H if not epd._sqr else numr110V
     smol = freesans20 if not epd._sqr else freesans20V
-
-    epd.draw.text('3', big, 230, 208, c = 1)
+    #epd(2)
+    epd.draw.text(' Mercredi 20 dec 2025', smol, 0,10, c=0)
+    epd.draw.text('3', big, 230, 100, c = 0)
     epd.draw.rect(350,250,50,50)
+    epd.draw.fill(c=3, diff=True, key = 1, invert = False)
     epd.show()
+    epd(2)
+    epd.reinit()
+    epd.draw.text('44', big, 0 , 0)
+    epd.draw.ellipse(90, 70, 120, 100, f= True)
+    epd.draw.fill(c=11, invert=True, diff = True)
+    epd.show(key = 0)
+    '''
     epd.draw.ellipse(10,10, 40, 100)
     epd.show(clear=True)
     epd(2, bw= True, partial=True)
@@ -70,7 +79,7 @@ if __name__ == "__main__":
     epd.draw.rect(100, 60, 40, 40, f=True, c = 0)
     epd.draw.pixel(10,10)
     epd.draw.text('42:48', big, manx,80)
-    epd.draw.text(' Mercredi 20 dec 2025', smol, manx,10, c=1)
+    epd.draw.text(' Mercredi 20 dec 2025', smol, manx,10, c=0)
 
     epd.draw.ellipse(100, 70, 79, 80, f= True)
     print(DR.blkl[-1].height)
@@ -99,6 +108,7 @@ if __name__ == "__main__":
     f.text('salut', 0, 0, 0)
     epd.draw.blit(20,30, cd, 50, 50)
     epd.show(clear=True)
+    '''
     epd.sleep()
 
  

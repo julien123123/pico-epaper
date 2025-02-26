@@ -1,4 +1,6 @@
 import core.draw as draw
+from core.draw import Drawable
+
 # --------------------------------------------------------
 # Drawing routines (directly to the display).
 # --------------------------------------------------------
@@ -57,9 +59,7 @@ class DirectMode:
             miny, maxy = yspan[0], yspan[1]
 
         self.Eink._set_window(minx, maxx, miny, maxy)
-        #self.Eink._set_frame()
         self.Eink._set_cursor(minx, miny)
-        #self.Eink.zero()
 
     def _color_sort(self, key):
         self.Eink._send_command(0x24)
@@ -91,13 +91,14 @@ class DirectMode:
 
     #To be rewritten
     @micropython.native
-    def fill(self, c=None, bw_ram=True):
-        c = 1 if not c else c
-        bbytes = 0xff if c & 1 else 0x00
-        self._send_bw(bytearray([bbytes] * ((self.sqr_side + 7) * self.ic_side // 8))) if bw_ram else None
-        if not self._partial and not self.monoc or not bw_ram:
-            rbytes = 0xff if c >> 1 else 0x00
-            self._send_red(bytearray([bbytes] * ((self.sqr_side + 7) * self.ic_side // 8)))
+    def fill(self,x = None, y = None, w =None, h = None, c = 1, key=-1, invert = False, diff = True):
+        d = None
+        if c in (0,1):
+            Drawable.background[diff] = 0xff if c else 0
+        else:
+            d = draw.Filler(x , y , w , h , color= c, key=key, invert= invert) #send this to the display
+        if d is not None:
+            self._ram_logic(d, diff)
 
     def pixel(self, x, y, c=None, diff = False):
         c = self.Eink.black if not c else c

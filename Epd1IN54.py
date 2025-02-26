@@ -1,6 +1,3 @@
-# works perfectly with direct draw when _partial even with the diffs
-# works on a full update if full != True
-
 from core.Eink import Eink
 from ustruct import pack
 
@@ -56,22 +53,22 @@ if __name__ == "__main__":
     big = numr110H if not epd._sqr else numr110V
     smol = freesans20 if not epd._sqr else freesans20V
     
-    epd.draw.text("Jimme so les ptates!", smol, 0, 140)
-    epd.draw.text('19', big, 20, 16, c = 1)
+    epd.draw.text("Jimme so les ptates!", smol, 0, 140, c=0)
+    epd.draw.text('19', big, 20, 16, c = 0)
     epd.draw.rect(0,10,10,10, f = True, c =0)
     epd.show(key = 0)
     epd.sleep()
 
     epd.reinit()
     epd(2, True, True, True)
-    epd.draw.text('19', big, 20, 16, diff=True, c=1)
-    epd.draw.text('WW', big, 20, 20, c=1)
+    epd.draw.text('19', big, 20, 16, diff=True, c=0)
+    epd.draw.text('WW', big, 20, 20, c=0)
     epd.show(True)
 
     epd(1, True,False, False)
     epd.reinit()
     import fantasmagorie as f
-    epd.draw.blit(10,0, f.fantasmagorie,f.width,  f.height, reverse= True, invert = True)
+    epd.draw.blit(10,0, f.fantasmagorie,f.width,  f.height, reverse= True, invert = False)
     epd.show(clear=True)
 
     epd.sleep()

@@ -53,7 +53,6 @@ class Eink(EinkBase):
         b += 1 << 6 if red else 0
         self._send(0x21, b)
 
-
     def _ld_norm_lut(self, lut=False):
         pass
 
