@@ -40,10 +40,11 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
     def _updt_ctrl_2(self):
         # Set Display Update Control 2 / loading LUTs
         if not self._partial:
-            self._send(0x22, 0xf7) 
+            self._send(0x22, 0xf7)
         else:
             #self._send(0x1A, 0x6E)
             self._send(0x22, 0xff)
+            print("hello, I'm very partial")
         self._read_busy()
 if __name__ == "__main__":
     from machine import Pin, SPI
@@ -54,23 +55,37 @@ if __name__ == "__main__":
 
     p = Pin(27, Pin.OUT)
     epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
-    epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
+    epd = EPD4IN2(rotation=180, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
 
     big = numr110H if not epd._sqr else numr110V
     smol = freesans20 if not epd._sqr else freesans20V
-    #epd(2)
+
     epd.draw.text(' Mercredi 20 dec 2025', smol, 0,10, c=0)
     epd.draw.text('3', big, 230, 100, c = 0)
     epd.draw.rect(350,250,50,50)
     epd.draw.fill(c=3, diff=True, key = 1, invert = False)
     epd.show()
+    print(epd._partial)
     epd(2)
-    epd.reinit()
+    print(epd._partial)
+    #epd.reinit()
     epd.draw.text('44', big, 0 , 0)
     epd.draw.ellipse(90, 70, 120, 100, f= True)
-    epd.draw.fill(c=11, invert=True, diff = True)
+    epd.draw.fill(c=20, invert=True, diff = True)
     epd.show(key = 0)
-    '''
+    #epd.reinit()
+    epd(partial = True, pingpong = True)
+    epd.reinit()
+    epd.draw.fill(c=11,key = -1, diff =True) 
+    epd.draw.text('SY', big, 20, 20)
+    epd.show()
+    epd.draw.text('hello?', smol, 100, 20)
+    epd.show()
+    epd.show_ram()
+    #"""
+    epd(1, bw=True, partial = False)
+    epd.sleep()
+    epd.reinit()
     epd.draw.ellipse(10,10, 40, 100)
     epd.show(clear=True)
     epd(2, bw= True, partial=True)
@@ -108,7 +123,8 @@ if __name__ == "__main__":
     f.text('salut', 0, 0, 0)
     epd.draw.blit(20,30, cd, 50, 50)
     epd.show(clear=True)
-    '''
+    #"""
+    #epd.show_ram()
     epd.sleep()
 
  

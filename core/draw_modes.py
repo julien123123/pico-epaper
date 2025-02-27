@@ -89,7 +89,6 @@ class DirectMode:
             obj.ram_flag |= 0b10
             self.ram_fl |= 0b10
 
-    #To be rewritten
     @micropython.native
     def fill(self,x = None, y = None, w =None, h = None, c = 1, key=-1, invert = False, diff = True):
         d = None

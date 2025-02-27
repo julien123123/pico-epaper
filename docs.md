@@ -1,5 +1,3 @@
-from functools import partial
-
 # Epd Classes
 ```python
 from machine import Pin, SPI
@@ -128,7 +126,17 @@ Triggers an update sequence from display ram. This allows to draw sections of th
 
 # Direct Draw
 
-This module mirors micropython's framebuf methods, but it's been optimized to work with specifically e-papers, deepsleep, and micropython native/viper. If you don't need to update the whole display every time, it will use way less ressources too (I mean, that's my goal). For example, if you are making a clock, and you have to wake up your microcontroller every minute, you can just make it draw the number you need without having to deal with a large bytearray. This can be quite quick.
+This module mirors micropython's framebuf methods, but it's been optimized to work with specifically e-papers, deepsleep, 
+and micropython native/viper. If you don't need to update the whole display every time, it will use way less ressources 
+too (I mean, that's my goal). For example, if you are making a clock, and you have to wake up your microcontroller every 
+minute, you can just make it draw the number you need without having to deal with a large bytearray. This can be quite 
+quick.
+>[!TIP]
+> This library gives you a lot of options for dynamically showing shapes created from scratch, which can be useful for
+> actually coming up with your program. When you are further in development, it's a good idea to pre-render as much graphics
+> as possible using the `export()` function for example. You can also process fonts directly through [font_to_py](https://github.com/peterhinch/micropython-font-to-py/tree/master), or using
+> quick functions to apply patterns for example.
+
 ## Diff parameter
 - `diff` [*bool*, defaults to *False*] parameter: you can use this parameter along with those methods to send the drawn object directly to the red ram 
 of the display. In partial mode with BW2B, the black drawings sent to the red buffer that are white in bw ram will turn 
@@ -138,8 +146,24 @@ modified.
 ## Drawing Methods
 >[!NOTE]
 > In order to use the following methods, you must call you epd object, and then add .draw.*the method of your choosing* after it.
-### 1. fill(c=white)
-- not implemented yet
+### 1. fill(x = None, y = None, w =None, h = None, c = 1, key=-1, invert = False, diff = True)
+Special DirectDraw function. It is used to fill the background of the buffers.
+- `c`[_int_, defaults to _1_] 0 or 1 determines the background of the buffers. 1 is always the default. if `diff` is False, This will change the background in the black and white RAM, if it's True, it will change de background in the red RAM.
+  - Values between 2 and 23 will fill the buffer determined by the diff keyword with a pattern. In normal updates, 2 buffers mode, the black (0s) in the bw RAM will be transparent. Filling red RAM with a pattern will change the color/pattern of what is on the be RAM.
+- `x`, `y`. `w`, `h`[_int_] are the same as for rectangles. You can specify those values if you only want a portion of the display to be filled. For balck or white fill, use rectangle instead.
+- `key`[_int_, defaults to _-1_] if you put the fill object on top of other objects, you can choose a color to make transparent by choosing either 1 or 2.
+- `invert`[_bool_, defaults to _False_] Make True if you want to invert the color of the pattern.
+
+```python
+import freesans20
+epd(2) # put epd in 2 buffer modes
+epd.draw.fill(c = 2, diff = True)
+epd.draw.ellipse(60,60, 20, 20, fill = True, c = 0)
+epd.text("Hello you", freesans20, 50, 40, invert = False) # This will create white text over a black circle
+epd.show() # Here the black will become the checkers pattern since the diff buffer will be filled with it
+epd.sleep()
+```
+
 ### 2. pixel(x, y, c=black, diff =False)
 ```python
 epd.draw.pixel(0,1)
@@ -236,4 +260,15 @@ epd.draw.text(text = "12:35", font = freesans20, x = 20, y = 20) # Sending actua
 epd.show()
 epd.sleep
 ```
+### Creating a new pattern
+```python
+from core.draw import Pattern
 
+new_pattern = Pattern(*Pattern.append(b'\xaaU'), w = 1, h = 2) # This is the same as the checkers pattern
+epd.draw.fill(c = 24) # This new pattern will be appended after the default ones
+```
+`Pattern.append()` returns the in an out of the main Pattern class bytearray. The patterns have to fit within 8bits bytes,
+and the parameters `w` for width and `h` for height are the minimum amount of byte it takes for the pattern to repeat.
+> [!TIP]
+> Creating patterns directly in your ide is easier using binary notation like so `bytearray([0b00000000])`, or you can use
+> an image editor that's able to export xbm files, and edit pixels in black and white.

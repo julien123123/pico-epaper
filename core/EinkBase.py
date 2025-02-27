@@ -169,12 +169,11 @@ class EinkBase:
     # --------------------------------------------------------
     # Public methods.
     # --------------------------------------------------------
-
+    # TODO making __call__ function work without actually resetting
+    # Looks like 0xff for normal mode else if partial.
     def __call__(self, nbuf = 1, bw = None, partial = None, pingpong = None):
         """Set the hardware and software operation mode of the display"""
-        # Change attributes only if specified
         setattr(self, 'monoc', bw) if bw is not None else None
-        setattr(self, 'pp', pingpong) if pingpong is not None else None
 
         if self.monoc:
             if nbuf == 1:
@@ -189,9 +188,12 @@ class EinkBase:
             self.draw.mode = dms.G2B
             self._partial = False
 
+        setattr(self, 'pp', pingpong) if pingpong is not None and self._partial else setattr(self, 'pp', False) if not self._partial else None
         col = 0xff if self._partial else 0x00
-        pp = 0x4f if self.pp else 0xf
+        pp = 0x4f if self.pp and self._partial else 0xf if self._partial else 0x0
         self._send(0x37, pack("10B", 0x00, col, col, col, col, pp, col, col, col, col)) # The last 4 bytes don't matter
+        # Looks like ths is not the right way to setup the display for partial update. This is more like manual override
+
         self._clear_ram()
         self._sort_ram()
 

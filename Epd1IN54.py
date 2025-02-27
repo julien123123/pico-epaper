@@ -72,5 +72,3 @@ if __name__ == "__main__":
     epd.show(clear=True)
 
     epd.sleep()
-    
-    print(epd._abs_xy(0, 0))

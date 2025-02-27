@@ -757,9 +757,19 @@ class Filler(Drawable):
         yield from self.fn
 
 class Pattern:
-    cl_ba = b'\xaaU\x92I$I$\x92$\x92I\x11\x88D"\x00\xff\x00\xff\xff0xaaDD\xee\xeeDD\x11\x11\xbb\xbb\x11\x11U"U\x88\x88"\xaa\xaa\x00UU\x00\xaa\xaa\x00UU\xaa\xaa\xcc33\x99\xccf\x11\xaaD\xaa\x11\xaa\x11\xaaD\xaaD\xaaD\xaa\x00\xaa\x11\xaa\x00U\x00a\x86\x18\x92I$\x92I$a\x86\x18\x0c0\xc3\x92I$\x92I$\x0c0\xc33\x99\x11\x00U\x00D\xeeD\x11'
+    cl_ba = bytearray(b'\xaaU\x92I$I$\x92$\x92I\x11\x88D"\x00\xff\x00\xff\xff\xaaDD\xee\xeeDD\x11\x11\xbb\xbb\x11\x11U"'
+                      b'U\x88\x88"\xaa\xaa\x00UU\x00\xaa\xaa\x00UU\xaa\xaa\xcc33\x99\xccf\x11\xaaD\xaa\x11\xaa\x11\xaaD'
+                      b'\xaaD\xaaD\xaa\x00\xaa\x11\xaa\x00U\x00a\x86\x18\x92I$\x92I$a\x86\x18\x0c0\xc3\x92I$\x92I$\x0c0'
+                      b'\xc33\x99\x11\x00U\x00D\xeeD\x11')
     all = []
     __slots__ = ['b','w','h']
+
+    @classmethod
+    def append(cls, ba):
+        bain = len(cls.cl_ba)
+        cls.cl_ba.extend(ba)
+        bout = len(cls.cl_ba)
+        return bain, bout
 
     def __init__(self, bain, baout, w, h):
         self.b = memoryview(Pattern.cl_ba[bain:baout])
@@ -789,28 +799,29 @@ class Pattern:
             for b in range(lench):
                 r[n*lench+b] = int(byt[b])
 
-checkers = Pattern(0, 2, 1,2)       #2
-small_diags = Pattern(2, 11,3,3)    #3
-big_diags = Pattern(11, 15,1,3)     #4
-small_lines = Pattern(15, 17,1,2)   #5
-big_lines = Pattern(17, 20,1,3)     #6
-vlines = Pattern(20, 24, 1,1)       #7
-crosses = Pattern(24, 36, 2,6)      #8
-small45_sqr= Pattern(36,40, 1,4)    #9
-alt_dots = Pattern(40,42,1,2)       #10
-thicks = Pattern(42,45,1,3)         #11
-alt_thicks = Pattern(45, 51, 1,6)   #12
-hi_checkers = Pattern(51, 55,1,4)   #13
-long_checkers = Pattern(55, 57, 1,2)#14
-wiggle = Pattern(57, 61,1,4)        #15
-chevron = Pattern(61, 64,1,3)       #16
-double_cross = Pattern(64,72,1,8)   #17
-fives = Pattern(72, 80,1,8)         #18
-aligned_dots = Pattern(80, 82,1,2)  #19
-bubbles = Pattern(82, 106,3,8)      #20
-zigzag = Pattern(106, 108,1,2)      #21
-tartan = Pattern(108,112,1,4)       #22
-dot_cross = Pattern(112,116, 1,4)   #23
+# Pattern definitions
+checkers = Pattern(0, 2, 1, 2)          #2
+small_diags = Pattern(2, 11, 3, 3) 	  #3
+big_diags = Pattern(11, 15, 1, 4) 	  #4
+small_lines = Pattern(15, 17, 1, 2) 	  #5
+big_lines = Pattern(17, 20, 1, 3) 	  #6
+vlines = Pattern(20, 21, 1, 1) 	      #7
+crosses = Pattern(21, 33, 2, 6) 	      #8
+small45_sqr = Pattern(33, 37, 1, 4) 	  #9
+alt_dots = Pattern(37, 39, 1, 2) 	      #10
+thicks = Pattern(39, 42, 1, 3) 	      #11
+alt_thicks = Pattern(42, 48, 1, 6) 	  #12
+hi_checkers = Pattern(48, 52, 1, 4) 	  #13
+long_checkers = Pattern(52, 54, 1, 2)    #14
+wiggle = Pattern(54, 58, 1, 4) 	      #15
+chevron = Pattern(58, 61, 1, 3) 	      #16
+double_cross = Pattern(61, 69, 1, 8) 	  #17
+fives = Pattern(69, 77, 1, 8) 	      #18
+aligned_dots = Pattern(77, 79, 1, 2) 	  #19
+bubbles = Pattern(79, 103, 3, 8) 	      #20
+zigzag = Pattern(103, 105, 1, 2) 	      #21
+tartan = Pattern(105, 109, 1, 4) 	      #22
+dot_cross = Pattern(109, 113, 1, 4) 	  #23
 
 @micropython.native
 def l_by_l(buf, w, h):
@@ -922,7 +933,7 @@ if __name__ is '__main__':
     t.ram_flag = 1
     #p = Pixel(90, 5, 0)
     #p.ram_flag = 1
-    lll = Ellipse(20, 20, 40,20, 0,True, 0b1011)
+    lll = Ellipse(100, 120, 40,20, 0,True, 0b1011)
     #print(lll.setup2())
     lll.ram_flag = 1
 
