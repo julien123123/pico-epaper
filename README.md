@@ -23,8 +23,8 @@ ram, and micrypython's viper mode. This allows for faster drawing times, and dra
 you may still use the FrameBuffer class to draw on the display.
 
 Here are the currently supported displays:
-- 1.54" 200x200 with SSD1681 driver / GDEW0154M09
-- 2.9" 296x128 with SSD1680 driver GDEH029A1
+- 1.54" 200x200 with SSD1681 driver / GDEY0154D67
+- 2.9" 296x128 with SSD1680 driver GDEY029T94
 - 3.7" 540x960 with SSD1677 driver ED037TC1
 - 4.2" 400x300 with SSD1683 driver GDEW042T2
 

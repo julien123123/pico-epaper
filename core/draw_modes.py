@@ -149,7 +149,6 @@ class DirectMode:
         self._set_frame()
         self._color_sort(key)
         self.Eink._updt_ctrl_2()
-        self.Eink._ld_norm_lut() if not self.Eink._partial else self.Eink._ld_part_lut()
         self.Eink._send_command(0x20)
         self.Eink._read_busy()
         setattr(self, 'ram_fl', 0) if flush else None

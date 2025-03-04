@@ -40,24 +40,12 @@ class Eink(EinkBase):
             result = (result << 1) | ((num >> i) & 1)
         return result
 
-    def _send_buffer(self, buffer):
-        if self._sqr:
-            self._send_data(bytes(map(self._reverse_bits, buffer)))
-        else:
-            self._send_data(buffer)
-
     def _void_ram(self, bw = False, red = False):
         '''voids the ram'''
         b = 0
         b += 1 << 2 if bw else 0
         b += 1 << 6 if red else 0
         self._send(0x21, b)
-
-    def _ld_norm_lut(self, lut=False):
-        pass
-
-    def _ld_part_lut(self):
-        pass
 
     # --------------------------------------------------------
     # Public methods.
@@ -73,27 +61,20 @@ class Eink(EinkBase):
             self.ram_inv = False
         self._send(0x21, b)
 
-    def show_ram(self, lut=0):
+    def show_ram(self):
         ''' convinience function for testing '''
-        self._ld_norm_lut(lut)
+        self._updt_ctrl_2()
         self._send_command(0x20)
         self._read_busy()
 
     def clear(self):
         '''Clears the display'''
-        self.partial_mode_off() if self._partial else None
-        self.width, self.height = (self.sqr_side, self.ic_side) if self._sqr else (self.ic_side, self.sqr_side)
-        s = (self.sqr_side + 7) * self.ic_side // 8
-        self._set_frame()
-        self._updt_ctrl_2()
-        self.zero(0, 0, 0)
-        self._send_command(0x24)
-        self._send_data(bytearray([0xff] * s))
-        self._send_command(0x26)
-        self._send_data(bytearray([0xff] * s))
-        self.show_ram(0)
+        self.__call__(1, self.norm, False, False)
+        self.draw.pixel(10, 1, diff= True)
+        self.show(full= True, clear = True, key=1)
 
     def show(self, full = False, flush = True, key = -1, clear = False):
         ''' This makes it easier to update the display'''
+        self._sort_ram()
         self._clear_ram() if clear else None
         self.draw.show(full, flush, key)

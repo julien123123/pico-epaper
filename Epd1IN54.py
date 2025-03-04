@@ -1,3 +1,28 @@
+"""
+# Epd1In54 definitions
+seq = breg[0:4] = b'\x03\x01\x00\x02'
+clr_ram_blk = breg[4] = 0xe6
+clr_ram_wt = breg[5] = 0xe5
+gate_nb = breg[6:9] = b'\xc7\x00\x00'
+gate_v = breg[9] = 0xff
+source_v = breg[10:13] = 255
+st_vcom = breg[13] = 0xff
+soft_start = breg[14:19] = 255
+upd2_norm = breg[19] = 0xf7
+lut_norm = breg[20] = 0xff
+upd2_part = breg[21] = 0xfc
+lut_part = breg[22] = 0xff
+wr_temp_quick = breg[23] = 0x64
+ld_temp_quick = breg[24] = 0x91
+upd2_quick = breg[25] = 0xc7
+lut_quick = breg[26] = 0xff
+wr_temp_gr = breg[27] = 0x5a
+ld_temp_gr = breg[28] = 0x91
+upd2_gr = breg[29] = 0xcf
+lut_gr = breg[30] = 0xff
+breg = bytearray(b'\x03\x01\x00\x02\xe6\xe5\xc7\x00\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xfc\xffd\x91\xc7\xffZ\x91\xcf\xff')
+"""
+
 from core.Eink import Eink
 from ustruct import pack
 
@@ -6,36 +31,17 @@ class EPD1IN54(Eink):  # SSD1681
     white = 0b01
     darkgray = 0b10
     lightgray = 0b11
+    breg = b'\x03\x01\x00\x02\xe6\xe5\xc7\x00\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xfc\xffd\x91\xc7\xffZ\x91\xcf\xff'
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 200
         self.ic_side = 200
-        self._seqs = (0x03, 0x01, 0x00, 0x02) # structure ( 0°, 90°, 180°, 270°) framebuf mode good vals (3, 6, 0, 5)
+        self._seqs = b'\x03\x01\x00\x02' # structure ( 0°, 90°, 180°, 270°) framebuf mode good vals (3, 6, 0, 5)
         super().__init__(spi, *args, **kwargs)
-
-    def _clear_ram(self, bw=True, red=True): 
-        if red:
-            self._send(0x46, 0xe5)
-            self._read_busy()
-        if bw:
-            self._send(0x47, 0xe5)
-            self._read_busy()
-
-    def _set_gate_nb(self):
-        # Set gate number.
-        self._send(0x01, pack("3B", 0xC7, 0x00, 0x00)) # Mirror if last bit == 0x01
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
         return self.width // 8 if num is None else 0 if num is 0 else  num // 8
-
-    def _updt_ctrl_2(self):
-        # Set Display Update Control 2 / loading LUTs
-        if not self._partial:
-            self._send(0x22, 0xf7)
-        else:
-            self._send(0x22, 0xff)
-        self._read_busy()
 
 if __name__ == "__main__":
     from machine import Pin, SPI
@@ -58,14 +64,13 @@ if __name__ == "__main__":
     epd.draw.rect(0,10,10,10, f = True, c =0)
     epd.show(key = 0)
     epd.sleep()
-
     epd.reinit()
-    epd(2, True, True, True)
+    epd(2, mode = epd.part, pingpong=True)
     epd.draw.text('19', big, 20, 16, diff=True, c=0)
     epd.draw.text('WW', big, 20, 20, c=0)
     epd.show(True)
 
-    epd(1, True,False, False)
+    epd(1, mode = epd.quick, pingpong = False)
     epd.reinit()
     import fantasmagorie as f
     epd.draw.blit(10,0, f.fantasmagorie,f.width,  f.height, reverse= True, invert = False)

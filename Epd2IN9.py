@@ -1,3 +1,28 @@
+"""
+# Epd2IN9 definitions
+seq = breg[0:4] = b'\x03\x02\x00\x01'
+clr_ram_blk = breg[4] = 0xe6
+clr_ram_wt = breg[5] = 0xe5
+gate_nb = breg[6:9] = b"'\x01\x00"
+gate_v = breg[9] = 0xff
+source_v = breg[10:13] = 255
+st_vcom = breg[13] = 0xff
+soft_start = breg[14:19] = 255
+upd2_norm = breg[19] = 0xf7
+lut_norm = breg[20] = 0xff
+upd2_part = breg[21] = 0x1c
+lut_part = breg[22] = 0xff
+wr_temp_quick = breg[23] = 0x5a
+ld_temp_quick = breg[24] = 0x91
+upd2_quick = breg[25] = 0xc7
+lut_quick = breg[26] = 0xff
+wr_temp_gr = breg[27] = 0xff
+ld_temp_gr = breg[28] = 0xff
+upd2_gr = breg[29] = 0xf4
+lut_gr = breg[30] = 0xff
+breg = bytearray(b"\x03\x02\x00\x01\xe6\xe5'\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\x1c\xffZ\x91\xc7\xff\xff\xff\xf4\xff")
+"""
+
 from core.Eink import Eink
 
 class EPD2IN9(Eink):  # SSD1680
@@ -5,36 +30,17 @@ class EPD2IN9(Eink):  # SSD1680
     darkgray = 0b10
     lightgray = 0b11
     x_set = '2B'
+    breg = b"\x03\x02\x00\x01\xe6\xe5'\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\x1c\xffZ\x91\xc7\xff\xff\xff\xf4\xff"
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 296
         self.ic_side = 128
-        self._seqs = (0x03, 0x02, 0x00, 0x01)  # structure ( 0°, 90°, 180°, 270°)
+        #self._seqs = b'\x03\x02\x00\x01'  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
-
-    def _set_gate_nb(self):
-        # Set gate number.
-        self._send(0x01, pack("3B", 0x27, 0x01, 0x00))
 
     def _virtual_width(self, num=None):
         ''' returns width the way it is sent to the chip'''
         return self.width // 8 if num is None else 0 if num is 0 else  num // 8
-
-    def _clear_ram(self, bw=True, red=True):  # 0k, modifié la commande pour 0xe5
-        if red:
-            self._send(0x46, 0xe5)
-            self._read_busy()
-        if bw:
-            self._send(0x47, 0xe5)
-            self._read_busy()
-
-    def _updt_ctrl_2(self):
-        # Set Display Update Control 2 / loading LUTs
-        if not self._partial:
-            self._send(0x22, 0xf7)
-        else:
-            self._send(0x22, 0xff)
-        self._read_busy()
 
 if __name__ == "__main__":
     from machine import Pin, SPI

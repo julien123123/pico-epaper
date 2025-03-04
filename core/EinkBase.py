@@ -8,12 +8,14 @@ class EinkBase:
     white = 0
     darkgray = 0
     lightgray = 0
-    RAM_BW = const(0b01)
-    RAM_RED = const(0b10)
-    RAM_RBW = const(0b11)
+    norm = const(0)
+    quick = const(1)
+    part = const(2)
+    gray4 = const(3)
     x_set = 0  # format to send x width to the display
+    modes = (norm, quick, part, gray4)
 
-    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, monochrome=True):
+    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, hold = False):
         if rotation in (0,180):
             self.width = self.ic_side
             self.height = self.sqr_side
@@ -27,10 +29,12 @@ class EinkBase:
                 f"Incorrect rotation selected ({rotation}). Valid values: 0, 90, 180 and 270.")
 
         self._rotation = rotation
-        self.monoc = monochrome  # black and white only flag
+        self.monoc = True  # black and white only flag
         self.pp = False  # pingpong flag
         self.x2 = False  # Some displays need the buffer to be sent twice in normal mode
-        self.cur_seq = self._seqs[int(rotation/90)]
+        self.hold = hold # Hold memory when sleeping flag
+        self.cur_seq = self.breg[0:4][int(rotation/90)]
+        self.cur_md = EinkBase.modes[0] # start in normal mode
         self.draw = dms.DirectMode(self, 0, not self._sqr)
 
         self._rst = reset_pin
@@ -44,12 +48,6 @@ class EinkBase:
 
         self._partial = False
 
-        # Flag to tell if the window size instruction was sent
-        # To be removed
-        self.wndw_set = False
-        self.inited = False
-        self.ram_inv = False
-
         self._init_disp()
         sleep_ms(500)
 
@@ -61,11 +59,11 @@ class EinkBase:
 
     def _reset(self):
         self._rst(1)
-        sleep_ms(30)
+        sleep_ms(20)
         self._rst(0)
         sleep_ms(3)
         self._rst(1)
-        sleep_ms(30)
+        sleep_ms(20)
 
     def _send(self, command, data):
         self._send_command(command)
@@ -86,7 +84,30 @@ class EinkBase:
     def _set_window(self, start_x, end_x, start_y, end_y):
         self._send(0x44, pack(self.x_set, start_x, end_x))
         self._send(0x45, pack("2h", start_y, end_y))
-        self.wndw_set = True
+
+    def _clear_ram(self, bw=True, red=True):
+        if red:
+            self._send(0x46, self.breg[4])
+            self._read_busy()
+        if bw:
+            self._send(0x47, self.breg[4])
+            self._read_busy()
+
+    def _updt_ctrl_2(self):
+        # Set Display Update Control 2 / loading LUTs
+        if self.cur_md == self.norm:
+            self._send(0x22, self.breg[19])
+            self._load_LUT(self.breg[20]) if self.breg[20] is not 0xff else None
+        elif self.cur_md == self.gray4:
+            self._send(0x22, self.breg[29])
+            self._load_LUT(self.breg[30]) if self.breg[30] is not 0xff else None
+        elif self.cur_md == self.quick:
+            self._send(0x22, self.breg[25])
+            self._load_LUT(self.breg[26]) if self.breg[26] is not 0xff else None
+        else:
+            self._send(0x22, self.breg[21])
+            self._load_LUT(self.breg[22]) if self.breg[22] is not 0xff else None
+        self._read_busy()
 
     def _init_disp(self):
         # HW reset.
@@ -97,28 +118,33 @@ class EinkBase:
         sleep_ms(20)
 
         # Clear BW and RED RAMs.
-        self._clear_ram()
-
-        # Set gate/voltages according to each display
-        self._set_gate_nb()
-        self._set_voltage()
-
+        self._clear_ram() if not self.hold else None
+        # Set gate number.
+        self._send(0x01, self.breg[6:9]) # if last b is 1, then the display is mirrored
+        # Set gate voltage.
+        self._send(0x03, self.breg[9]) if self.breg[9] is not 0xff else None
+        # Set source voltage.
+        self._send(0x04, self.breg[10:13]) if self.breg[10] is not 0xff else None
         # Set Data Entry mode.
         self._send(0x11, self.cur_seq)
-
         # Set border.
         self._send(0x3c, 0x03)
-
         # Booster Soft-start Control.
-        self._send(0x0c, pack("5B", 0xae, 0xc7, 0xc3, 0xc0, 0xc0))
-
+        self._send(0x0c, self.breg[14:19]) if self.breg[14] is not 0xff else None
         # Internal sensor on.
         self._send(0x18, 0x80)
 
-        self._set_VCOM()
+        # Set Vcom
+        self._send(0x2c, self.breg[13]) if self.breg[13] is not 0xff else None
+
+        if self.cur_md & 1:
+            # if mode is quick update or shades of gray, load these.
+            self._send(0x1A, self.breg[23]) if not self.cur_md & 0b10 and self.breg[23] is not 0xff else self.breg[27] if self.breg[27] is not 0xff else None# Write temp register
+            self._send(0x22, self.breg[24]) if self.breg[24] is not 0xff else None  # Load temp value
+            self._send_command(0x20)
+            self._read_busy()
 
         self._sort_ram()
-        self.inited = True
 
     def _abs_xy(self, rel_x, rel_y):
         """:returns absolute display coordinates"""
@@ -148,62 +174,41 @@ class EinkBase:
     def _send_data(self, data):
         raise NotImplementedError
 
-    def _clear_ram():
-        raise NotImplementedError
-
-    def _set_gate_nb():
-        raise NotImplementedError
-
-    def _set_voltage(self):
-        pass
-
-    def _set_VCOM(self):
-        pass
-
     def _virtual_width():
         raise NotImplementedError
-
-    def _updt_ctrl_2(self):
-        pass
 
     # --------------------------------------------------------
     # Public methods.
     # --------------------------------------------------------
-    # TODO making __call__ function work without actually resetting
-    # Looks like 0xff for normal mode else if partial.
-    def __call__(self, nbuf = 1, bw = None, partial = None, pingpong = None):
+    def __call__(self, nbuf = 1, mode = None, pingpong = None, hold = None):
         """Set the hardware and software operation mode of the display"""
-        setattr(self, 'monoc', bw) if bw is not None else None
+        rst_flag = 0 if mode is not None and mode == self.cur_md else 1
+        setattr(self, 'cur_md', mode) if mode is not None else None
+        setattr(self, 'hold', hold) if hold is not None else None
 
-        if self.monoc:
+        if self.cur_md != self.gray4:
             if nbuf == 1:
                 self.draw.mode = dms.BW1B if not self.x2 else dms.BW2X
             elif nbuf == 2:
                 self.draw.mode= dms.BW2B
             else:
                 raise ValueError('Only 1 or 2 buffers can be selected')
-            setattr(self, '_partial', partial) if partial is not None else None
+            self._partial= True if self.cur_md is self.part else False
         else:
             # This always has 2 buffers
             self.draw.mode = dms.G2B
             self._partial = False
 
-        setattr(self, 'pp', pingpong) if pingpong is not None and self._partial else setattr(self, 'pp', False) if not self._partial else None
-        col = 0xff if self._partial else 0x00
-        pp = 0x4f if self.pp and self._partial else 0xf if self._partial else 0x0
-        self._send(0x37, pack("10B", 0x00, col, col, col, col, pp, col, col, col, col)) # The last 4 bytes don't matter
-        # Looks like ths is not the right way to setup the display for partial update. This is more like manual override
-
-        self._clear_ram()
+        if rst_flag:
+            self.reinit()
+            if self._partial:
+                pp = 0x4f if self.pp else 0xf
+                self._send(0x37, pack('10B', 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
+        self._clear_ram() if not self.hold else None
         self._sort_ram()
 
     def reinit(self):
-        """Public method for screen reinitialisation."""
         self._init_disp()
 
-
-    def sleep(self, ram_on = False):
-        self._send(0x10, 0x03) if ram_on == False else self._send(0x10, 0x01)
-        self.inited = False
-        self.wndw_set = False
-        self.ram_inv = False
+    def sleep(self):
+        self._send(0x10, 0x03) if self.hold == False else self._send(0x10, 0x01)

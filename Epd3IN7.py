@@ -1,7 +1,30 @@
+"""
+# Epd3IN7 definitions
+seq = breg[0:4] = b'\x03\x02\x00\x01'
+clr_ram_blk = breg[4] = 0xe6
+clr_ram_wt = breg[5] = 0xf7
+gate_nb = breg[6:9] = b'\xdf\x01\x00'
+gate_v = breg[9] = 0x0
+source_v = breg[10:13] = b'A\xa82'
+st_vcom = breg[13] = 0x44
+soft_start = breg[14:19] = b'\xae\xc7\xc3\xc0\xc0'
+upd2_norm = breg[19] = 0xf7
+lut_norm = breg[20] = 0x1
+upd2_part = breg[21] = 0xff
+lut_part = breg[22] = 0x2
+wr_temp_quick = breg[23] = 0xff
+ld_temp_quick = breg[24] = 0xff
+upd2_quick = breg[25] = 0xc7
+lut_quick = breg[26] = 0x0
+wr_temp_gr = breg[27] = 0xff
+ld_temp_gr = breg[28] = 0xff
+upd2_gr = breg[29] = 0xc7
+lut_gr = breg[30] = 0x0
+breg = bytearray(b'\x03\x02\x00\x01\xe6\xf7\xdf\x01\x00\x00A\xa82D\xae\xc7\xc3\xc0\xc0\xf7\x01\xff\x02\xff\xff\xc7\x00\xff\xff\xc7\x00')
+"""
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #
-# LUTs have been copied from original example for Waveshare Pico e-Paper 3.7,
-# which can be found here:
+# LUTs have been copied from original example for Waveshare Pico e-Paper 3.7:
 # https://github.com/waveshare/Pico_ePaper_Code/blob/main/python/Pico-ePaper-3.7.py
 #
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -72,55 +95,21 @@ class EPDPico(Eink):  # SSD1677
     darkgray = 0b01
     lightgray = 0b10
     x_set = '2H'
+    breg = b'\x03\x02\x00\x01\xe6\xf7\xdf\x01\x00\x00A\xa82D\xae\xc7\xc3\xc0\xc0\xf7\x01\xff\x02\xff\xff\xc7\x00\xff\xff\xc7\x00'
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 480
         self.ic_side = 280
-        self._seqs = (0x03, 0x02, 0x00, 0x01)  # structure ( 0°, 90°, 180°, 270°)
+        #self._seqs = b'\x03\x02\x00\x01'  # structure ( 0°, 90°, 180°, 270°)
         self._luts = (EPD_3IN7_lut_4Gray_GC,
                       EPD_3IN7_lut_1Gray_GC,
                       EPD_3IN7_lut_1Gray_DU,
                       EPD_3IN7_lut_1Gray_A2)
-
         super().__init__(spi, *args, **kwargs)
 
-    def _set_gate_nb(self):
-        # Set gate number.
-        self._send(0x01, pack("hB", 479, 0))  # 1= mirror
-
-    def _set_voltage(self):
-        # Set gate voltage.
-        self._send(0x03, 0x00)
-        # Set source voltage.
-        self._send(0x04, pack("3B", 0x41, 0xa8, 0x32))
-
-    def _set_VCOM(self):
-        self._send(0x2c, 0x44)
-
     def _virtual_width(self, num=None):
-        ''' returns width the way it shoulf be sent to the chip'''
+        ''' returns width the way it should be sent to the chip'''
         return self.width if num is None else 0 if num is 0 else num
-
-    def _updt_ctrl_2(self):
-        # Set Display Update Control 2
-        if not self._partial:
-            self._send(0x22, 0xc7)
-        else:
-            self._send(0x22, 0xcf)
-
-    def _clear_ram(self, bw=True, red=True):
-        if red:
-            self._send(0x46, 0xf7)
-            self._read_busy()
-        if bw:
-            self._send(0x47, 0xf7)
-            self._read_busy()
-
-    def _ld_norm_lut(self, lut=False):
-        self._load_LUT(lut) if lut else self._load_LUT(0) if not self.monoc else self._load_LUT(1)
-
-    def _ld_part_lut(self):
-        self._load_LUT(2)
 
 if __name__ == "__main__":
     from machine import SPI, Pin
