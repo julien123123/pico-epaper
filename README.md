@@ -23,20 +23,24 @@ ram, and micrypython's viper mode. This allows for faster drawing times, and dra
 you may still use the FrameBuffer class to draw on the display.
 
 Here are the currently supported displays:
-- 1.54" 200x200 with SSD1681 driver / GDEY0154D67
+- 1.54" 200x200 with SSD1681 driver  GDEY0154D67
 - 2.9" 296x128 with SSD1680 driver GDEY029T94
 - 3.7" 540x960 with SSD1677 driver ED037TC1
-- 4.2" 400x300 with SSD1683 driver GDEW042T2
+- 4.2" 400x300 with SSD1683 driver GDEW042T2 / GY-E042A87 (no fast mode)
 
 *If your display is not listed, you can try to use the driver for the closest resolution and driver. It may work, but it 
 may not. Using the other epd files as a reference, you can try to make your own driver.
 
 Also, I have only tested this module on ESP-32s, and RP2040, the library may not work as expected on other ports.
 
+I'm in the process of creating the examples. The files are there, but you should rely more on the epd files for the time being
+
 ---
 ## Documentation
 
 You can find all the documentations about how this library works [here](/docs.md)
+
+
 ---
 
 ## Installation

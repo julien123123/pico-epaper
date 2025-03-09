@@ -3,12 +3,13 @@
 from machine import Pin, SPI
 import Epd4IN2
 epdspi = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None) #Spi object, miso is not needed
-epd = Epd4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=Pin(15), busy_pin=Pin(16))
+epd = Epd4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=Pin(15), busy_pin=Pin(16), hold = False)
 ```
 ### Constructor arguments:
 - `rotation: int` accepts 0, 90, 180, 270 degrees. 0 degress is always in the orientation where the driver chip is at the bottom
 - `spi` SPI object. Most modules don't have a miso pin. If your mcu doesn't accept None, just use an unused pin.
 - `cs_pin`, `dc_pin`, `reset_pin`, `busy_pin` accept machine.Pin objects. They are the pins you are using from your Eink modules to your microcontroller.
+- `hold`[*bool*, default = *True*] If true, ram in epd IC will be retained.
 >[!TIP]
 > Sometimes the pins on your module might not be named the same as my module. For example, `SCK` might be named `SCL`, `MOSI`
 > might be named `SDA` or `DAT`
@@ -16,7 +17,7 @@ epd = Epd4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=Pi
 ## Methods
 ### __Call\__ (dispay modes)
 ```python
-epd(nbuf = 1, bw = True, partial = True, pingpong = True) # put display in partial mode.
+epd(nbuf = 1, mode = None, pingpong = None, hold = None) # put display in partial mode.
 ```
 Enables different update modes for the display. Use it by calling the name of your instance and adding the parameters in parentheses.
 
@@ -28,10 +29,12 @@ Enables different update modes for the display. Use it by calling the name of yo
   - Shades of grey mode will automatically use 2 buffers.
   - In full mode, if you use 2 buffers, bw ram will show white as opaque and black as transparent. Red ram will show black as opaque and white as transparent. The red ram will show images normally within what is black in the bw ram. That's why in 1 buffer mode, the red ram is voided.
 
-- `partial` is for quick partial updates. if False, the display will be updated completely with the ram content.
+- `mode`[*mode*, default = current mode (*None*)] this gives you a choice between [whatever you choose to name your instance, in this case epd]. any of these modes:
+  - [instance].norm : normal full refresh updates
+  - [instance].quick: 1 flash update, not the same as partial, but not as many flashes as norm
+  - [instance].part: very quick, no flash updates to a part of the display
+  - [instance].gray4: 4 shades of grey, from white to black mode; more flashes than norm.
 
-- `bw` is false if you want to use shades of grey. Otherwise, set it to True.
-  - in grey mode, all other options are False, and the display will use 2 buffers.
 > [!NOTE]
 > When you call this method, only change the parameters you need. All the other parameters will be set from the epd attributes.
 
@@ -41,7 +44,7 @@ Enables different update modes for the display. Use it by calling the name of yo
 import time
 import freesans20
 
-epd(nbuf=2, partial=True, pingpong=True)
+epd(nbuf=2, mode = epd.part, pingpong=True)
 epd.draw.text(text="Welcome to my EPD", font=freesans20, x=20, y=20)
 epd.show()
 epd.draw.text(text="SEND NUDES", font=freesans20, x=20, y=20, diff=True)
@@ -80,7 +83,7 @@ Sends current frame buffer to screen and start refresh cycle.
 epd.sleep(ram_on = True) # Send epd to sleep, but keep the ram
 ```
 Puts display in sleep mode.
-- `ram_on`[*bool*, defaults to *False*] will keep the ram on while sleeping. This will drain a bit more current. If True, the display will discard it's ram
+- `ram_on`[*bool*, defaults to *False*] will keep the ram on while sleeping. This will drain a bit more current. If True, the display will discard its ram. You may initiate the display with hold = True if you plan on keeping the memory and have your microcontroller go in a deepsleep mode
 ### Example with light sleep and maintaining ram memory
 ```python
 import freesans20, machine
@@ -107,7 +110,8 @@ Inverts the bits in the selected display ram (both are by default)
 This method clears the display without any additional setup
 
 ## reinit()
-Reinits the display. Must be used after sleep()
+Reinits the display. Must be used after sleep().
+- reinit will take hold parameter and the current mode in consideration everytime. To change it, you must use the __call__ function
 ## show_ram()
 ```python
 import freesans20
@@ -190,8 +194,11 @@ epd.show()
 ```
 - `m`[*int*, defaults to *15*] parameter lets you specify which quarter you want to be shown in binary. A full circle is 15 because 15 = 0b1111
 - `f`[*bool*, defaults to *False*] if True, will fill the ellipse.
-### 8. poly(x, y, coords, c=black, f=False)
-not implemented yet
+### 8. poly(coords, c=black, f=False)
+Shape created by linking pre-defined points together. You might need to change the orders of the points to get the result you want.
+
+-`coords`[*list of tuples*] list of points in tuples like so: [(x,y)]. There must be at least 3 in order to get a shape.
+
 ### 9. text(text, font, x, y, c=black, spacing = False, fixed_width = False, diff = False, invert = True, v_rev = True)
 ```python
 import freesans20
@@ -231,6 +238,9 @@ Exports the current draw lineup.Same Params as show(), but will return the curre
 The tuples will be structured like so: (bw_buffer, width in bytes, height), (red_buffer, width in bytes, height)
 
 *See show_ram example
+
+### export_into(buff, full = False, flush = True, key = -1, bw = True, red = False)
+Exports current draw lineup in specified buffer. If the buffer is smaller than the display buffer, you may have to run the function many times with parameter flush = False.
 ### send_to_disp(full = False, flush = True, key = -1)
 Sends the buffers to the display without refreshing. This allows you to draw de display asynchronously.
 
@@ -254,7 +264,7 @@ epd.show()
 epd.sleep()
 time.sleep(1) # Here to simulate your mcu going to sleep
 epd.reinit()
-epd(partial = True, pingpong = True) # Puting the epd in partial mode
+epd(nbuf = 2, mode = epd.part, pingpong = True) # Putting the epd in partial mode
 epd.draw.text(text = "12:34", font = freesans20, x = 20, y = 20, diff = True) # Sending these pixels to differential to be erased if not black in main ram
 epd.draw.text(text = "12:35", font = freesans20, x = 20, y = 20) # Sending actual image
 epd.show()

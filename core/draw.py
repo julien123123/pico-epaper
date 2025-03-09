@@ -39,7 +39,7 @@ class Drawable:
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = cls.c_width()+1
-        total_height = cls.c_height()+1
+        total_height = cls.c_height()
         cls.main_row_pointer = cls.yspan[0]
 
         for fil in cls.fll:
@@ -47,24 +47,12 @@ class Drawable:
 
         for line in range(total_height):
             row = bytearray([cls.background[0 if black_ram else 1]]*row_w)
-            for obj in cls.blkl:
+            for obj in cls.blkl + cls.whtl + cls.fll:
                 if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
-                    first_x = max(0, obj.actual_x //8 - cls.xspan[0])
-                    nxt = next(obj._gen)
-                    key_m[k+1](row, row_w, nxt, len(nxt), first_x)
-                    obj.row_pointer += 1
-            for obj in cls.whtl:
-                if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
-                    first_x = max(0, obj.actual_x //8 - cls.xspan[0])
+                    first_x = max(0, obj.actual_x // 8 - cls.xspan[0])
                     nxt = next(obj._gen)
                     key_m[k + 1](row, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer += 1
-            for fil in cls.fll:
-                if (fil.ram_flag & ram_chk) and fil.actual_y + fil.row_pointer == cls.main_row_pointer and fil.row_pointer < fil.height:
-                    first_x = max(0, fil.actual_x // 8 - cls.xspan[0])
-                    nxt = next(fil._gen)
-                    key_m[fil.key+1](row, row_w, nxt, len(nxt), first_x)
-                    fil.row_pointer +=1
             cls.main_row_pointer += 1
             yield row
 
@@ -92,6 +80,65 @@ class Drawable:
                 break
             row[first_x + ind] = row[first_x + ind] | objline[ind]
 
+    @micropython.viper
+    @classmethod
+    def draw_all_into(cls, buf:ptr8, lenbuf:int, k:int, red_ram:bool, black_ram:bool) -> int:
+        """Draw into an object with buffer protocl. Can be re-run until epmty"""
+        key_m = (cls.ik_none, cls.ik_0, cls.ik_1)
+        if int(red_ram) and int(black_ram):
+            raise ValueError('Cannot draw on both red and black ram at the same time')
+        ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
+        print(f"x span = {cls.xspan}, y span = {cls.yspan}")
+        row_w = int(cls.c_width()) + 1
+        total_height = int(cls.c_height())
+        bufh = lenbuf // row_w
+        max_buf_h = min(int(bufh), total_height-int(cls.main_row_pointer))
+        cls.main_row_pointer = cls.yspan[0] if int(cls.main_row_pointer) == 0 else int(cls.main_row_pointer)
+        xspan0 = int(cls.xspan[0])
+
+        for fil in cls.fll:
+            fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
+
+        for line in range(int(max_buf_h)):
+            lnst = line*row_w
+            for b in range(row_w):
+                buf[lnst+b] = int(cls.background[0 if black_ram else 1])
+            for obj in cls.blkl + cls.whtl + cls.fll:
+                if (int(obj.ram_flag) & ram_chk) and int(obj.actual_y) + int(obj.row_pointer) == int(cls.main_row_pointer) and int(obj.row_pointer) < int(obj.height):
+                    first_x = max(0, int(obj.actual_x) // 8 - xspan0)
+                    nxt = next(obj._gen)
+                    key_m[k + 1](buf, lnst, row_w, nxt, len(nxt), first_x)
+                    obj.row_pointer = int(obj.row_pointer) + 1
+            cls.main_row_pointer = int(cls.main_row_pointer) + 1
+        return row_w*int(max_buf_h)
+
+    @micropython.viper
+    @staticmethod
+    def ik_none(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        objst = rost+first_x
+        for ind in range(lenob):
+            if int(ind) >= lenro:
+                break
+            buf[objst + ind] = objline[ind]
+
+    @micropython.viper
+    @staticmethod
+    def ik_0(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        objst = rost + first_x
+        for ind in range(lenob):
+            if int(ind) >= lenro:
+                break
+            buf[objst + ind] = int(buf[objst + ind]) & objline[ind]
+
+    @micropython.viper
+    @staticmethod
+    def ik_1(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        objst = rost + first_x
+        for ind in range(lenob):
+            if int(ind) >= lenro:
+                break
+            buf[objst + ind] = buf[objst + ind] | objline[ind]
+
     @classmethod
     def flush(cls):
         cls.blkl = []
@@ -100,6 +147,7 @@ class Drawable:
         cls.main_row_pointer = 0
         cls.xspan = [None, None]
         cls.yspan = [None, None]
+        cls.background = [0xff, 0xff]
 
     @classmethod
     def reset(cls):
@@ -276,6 +324,117 @@ class StrLine(Drawable):
     def draw(self):
         yield from self.fn
 
+class Poly(Drawable):
+    def __init__(self, vert, c, fill, parse = True):
+        self.p = vert
+        self.xs, self.ys = zip(*self.p)
+        self.x = min(self.xs) if Drawable.hor else min(self.ys)
+        self.y = min(self.ys) if Drawable.hor else min(self.xs)
+        self.fill = fill
+        self.nedges = len(self.p)
+        super().__init__(self.x , self.y, c)
+        self.bwidth = (self.shift + self.width + 7)//8
+        #self._fill_polygon()
+        self._parse() if parse else None
+
+    @property
+    def width(self):
+        return max(self.xs) - self.x if Drawable.hor else max(self.ys) - self.y
+
+    @property
+    def height(self):
+        return max(self.ys) - self.y if Drawable.hor else max(self.xs) - self.x
+
+    def setup(self):
+        pass
+
+    def _bresenham_line(self, x0, y0, x1, y1):
+        """Bresenham's line algorithm for drawing edges."""
+        dx = abs(x1 - x0)
+        dy = -abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx + dy
+        while True:
+            print(x0, y0)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
+
+    def _fill_polygon(self):
+        """Fill polygon using scanline algorithm with an edge table."""
+        min_y = self.y
+        max_y = max(self.ys)
+        edge_table = [[] for _ in range(max_y - min_y + 1)]
+
+        # Build edge table
+        for i in range(self.nedges):
+            x0, y0 = self.p[i]
+            x1, y1 = self.p[(i + 1) % self.nedges]
+            if y0 == y1:  # Skip horizontal lines
+                continue
+            if y0 > y1:  # Ensure y0 < y1
+                x0, x1 = x1, x0
+                y0, y1 = y1, y0
+            dx = (x1 - x0) / (y1 - y0)
+            edge_table[y0 - min_y].append((x0, dx, y1))
+        # Scanline fill
+        active_edges = []
+        for y in range(min_y, max_y + 1):
+            active_edges.extend(edge_table[y - min_y])
+            active_edges = [(x, dx, y_max) for x, dx, y_max in active_edges if y < y_max]
+            active_edges.sort()
+
+            for i in range(0, len(active_edges), 2):
+                line = bytearray([0 if self.cc else 0xff]*self.bwidth)
+                x_start, _, _ = active_edges[i]
+                x_end, _, _ = active_edges[i + 1]
+                self.linec_fill(line, int(x_start), int(x_end)+1)
+                yield line
+
+
+            active_edges = [(x + dx, dx, y_max) for x, dx, y_max in active_edges]
+
+    @micropython.viper
+    def linec_fill(self, line:ptr8, x_start:int, x_end:int)->object:
+        start_byte = int(x_start) // 8
+        end_byte = int(x_end) // 8
+        start_bit = int(x_start) % 8
+        end_bit = int(x_end) % 8
+        if start_byte == end_byte:
+            # Both points are in the same byte
+            mask = ((1 << (end_bit - start_bit + 1)) - 1) << (7 - end_bit)
+            line[start_byte] = int(line[start_byte]) | mask if int(self.cc) else int(line[start_byte]) ^ mask
+        else:
+            # Fill first byte
+            first_mask = ((1 << (8 - start_bit)) - 1)
+            line[start_byte] = line[start_byte] | first_mask if self.cc else line[start_byte] ^ first_mask
+            for byte in range(start_byte + 1, end_byte):
+                line[byte] = 0xFF if self.cc else 0
+            if end_bit > 0:
+                last_mask = ~((1 << (7 - end_bit)) - 1)
+                line[end_byte] = line[end_byte] | last_mask if self.cc else line[end_byte] ^ last_mask
+
+    @micropython.viper
+    def linec_fill7(self, line:ptr8, xst:int, xend:int)->ptr8:
+        xbit = xst%8
+        xb = xst//8
+        line[xb] = int(line[xb]) ^ (1 << (7-xbit))  # Flip bit at xst position
+
+        if xst != xend:
+            xebit = xend%8
+            xeb = xend//8
+            line[xeb] = int(line[xeb]) ^ (1 << (7-xebit))  # Flip bit at xend position
+
+    def draw(self):
+        yield from self._fill_polygon()
+
 
 class ABLine(Drawable):
     # Lacks the possibility of drawing lines in different quadrants
@@ -290,11 +449,11 @@ class ABLine(Drawable):
 
     @property
     def width(self):
-        return self.w - self.shift - self.rem + (bool(self.shift) + bool(self.rem)) * 8 if Drawable.hor  else self.w
+        return self.w if Drawable.hor else self.h
 
     @property
     def height(self):
-        return self.h if Drawable.hor  else self.h - self.shift - self.rem + (bool(self.shift) + bool(self.rem)) * 8
+        return self.h if Drawable.hor else self.w
 
     def setup(self):
         pass
@@ -411,8 +570,9 @@ class Ellipse(Drawable):
         self.yr = yradius if Drawable.hor  else xradius
         self.fill = f
         self.m = m
+        self.points = bytearray((2 * self.yr + 1) * ((2 * self.xr + 8) // 8))
         super().__init__(x, y, color)
-        #self.setup()
+        self.setup()
         self._parse()
 
     @property
@@ -422,18 +582,20 @@ class Ellipse(Drawable):
     def height(self):
         return 2*self.yr+1
 
+    @micropython.native
     def setup(self):
-        # Create a bytearray for the points LUT, each byte represents 8 pixels
-        points = bytearray((2 * self.yr + 1) * ((2 * self.xr + 8) // 8))
-
-        def set_point(y_idx, x_pos):
+        @micropython.viper
+        def set_point(y_idx:int, x_pos:int):
+            xr = int(self.xr)
             # Convert x,y coordinates to bit position in bytearray
-            row_bytes = (2 * self.xr + 8) // 8
-            byte_idx = y_idx * row_bytes + (self.xr + x_pos) // 8
-            bit_pos = 7 - ((self.xr + x_pos) % 8)  # MSB first
-            points[byte_idx] |= (1 << bit_pos)
+            row_bytes = (2 * xr + 8) // 8
+            byte_idx = y_idx * row_bytes + (xr + x_pos) // 8
+            bit_pos = 7 - ((xr + x_pos) % 8)  # MSB first
+            self.points[byte_idx] = int(self.points[byte_idx]) | (1 << bit_pos)
 
-        def in_quadrant(px, py, quadrant_mask):
+        @micropython.viper
+        def in_quadrant(px:int, py:int, quadrant_mask:int)->int:
+            px, py = int(px), int(py)
             if px >= 0 and py <= 0:  # Q1 (top-right)
                 return quadrant_mask & 0b0001
             if px <= 0 and py <= 0:  # Q2 (top-left)
@@ -442,12 +604,12 @@ class Ellipse(Drawable):
                 return quadrant_mask & 0b0100
             if px >= 0 and py >= 0:  # Q4 (bottom-right)
                 return quadrant_mask & 0b1000
-            return False
+            return 0
 
         # Midpoint Ellipse Algorithm
-        x, y = 0, self.yr
-        x_radius2 = self.xr * self.xr
-        y_radius2 = self.yr * self.yr
+        x, y = 0, int(self.yr)
+        x_radius2 = int(self.xr) * int(self.xr)
+        y_radius2 = int(self.yr) * int(self.yr)
         x_radius2y_radius2 = x_radius2 * y_radius2
         dx = 2 * y_radius2 * x
         dy = 2 * x_radius2 * y
@@ -458,20 +620,20 @@ class Ellipse(Drawable):
             if self.fill:
                 # Fill horizontal line between points
                 for px in range(-x, x + 1):
-                    if in_quadrant(px, y, self.m):
-                        set_point(self.yr - y, px)
-                    if in_quadrant(px, -y, self.m):
-                        set_point(self.yr + y, px)
+                    if in_quadrant(px, y, int(self.m)):
+                        set_point(int(self.yr) - y, px)
+                    if in_quadrant(px, -y, int(self.m)):
+                        set_point(int(self.yr) + y, px)
             else:
                 # Draw boundary points
-                if in_quadrant(x, y, self.m):
-                    set_point(self.yr - y, x)
-                if in_quadrant(-x, y, self.m):
-                    set_point(self.yr - y, -x)
-                if in_quadrant(x, -y, self.m):
-                    set_point(self.yr + y, x)
-                if in_quadrant(-x, -y, self.m):
-                    set_point(self.yr + y, -x)
+                if in_quadrant(x, y, int(self.m)):
+                    set_point(int(self.yr) - y, x)
+                if in_quadrant(-x, y, int(self.m)):
+                    set_point(int(self.yr) - y, -x)
+                if in_quadrant(x, -y, int(self.m)):
+                    set_point(int(self.yr) + y, x)
+                if in_quadrant(-x, -y, int(self.m)):
+                    set_point(int(self.yr) + y, -x)
 
             if d1 < 0:
                 x += 1
@@ -515,15 +677,14 @@ class Ellipse(Drawable):
                 dx += 2 * y_radius2
                 dy -= 2 * x_radius2
                 d2 += dx - dy + x_radius2
-        return points
 
     @micropython.native
     def draw(self):
-        points = self.setup()
+        #self.setup()
         row_bytes = (2 * self.xr + 8) // 8
         bkgrd = 0 if self.cc else 0xff
         for y in range(2 * self.yr + 1):
-            row = points[y * row_bytes:(y + 1) * row_bytes]
+            row = self.points[y * row_bytes:(y + 1) * row_bytes]
             if any(row):  # Only yield rows that contain points
                 bline = bytearray(row)
                 if not self.cc:  # Invert the bits if needed
@@ -923,14 +1084,16 @@ if __name__ is '__main__':
     smol = freesans20 if Drawable.hor else freesans20V
     big = numr110H if Drawable.hor else numr110V
 
+    plg = Poly([(20,10),(60,4),(50,50), (3,30)], 0, False)
+    plg.ram_flag = 1
     #sm = Prerendered(9,10,20,20, smile, 1, invert = True, reverse = True)
     #sm.ram_flag = 1
     #br = ABLine(0,0, 30, 10, 0)
     #br.ram_flag = 1
     txt = ChainBuff("OCtoBRE1", smol, 9,0, False, False, 0, invert = True, v_rev=True)
     txt.ram_flag = 1
-    t= ChainBuff("33", big, 6, 7, False, False, invert = True, color=0)
-    t.ram_flag = 1
+    #t= ChainBuff("33", big, 6, 7, False, False, invert = True, color=0)
+    #t.ram_flag = 1
     #p = Pixel(90, 5, 0)
     #p.ram_flag = 1
     lll = Ellipse(100, 120, 40,20, 0,True, 0b1011)
@@ -944,10 +1107,26 @@ if __name__ is '__main__':
     #lin= StrLine(10, 60,20, 0, 'h')
     #lin.ram_flag = 1
     #Drawable.set_span(50,50, True)
-    d = Drawable.draw_all(black_ram = True, k=0)
+    #d = Drawable.draw_all(black_ram = True, k=0)
     #d = t.draw()
-    for i in d:
-        grid_print(i) if Drawable.hor else grid_print(i)
+    @timed_function
+    def generate(d):
+        c = bytearray()
+        for i in d:
+            c.extend(i)
+        return c
+    @timed_function
+    def genr(ba):
+        d = Drawable.draw_all_into(ba,len(ba), 0, False, True)
+        return d
+    #generate(d)
+    #Drawable.reset()
+    ba = bytearray(200//8*200)
+    r = genr(ba)
+    for l in l_by_l(ba[:r], 32*8, 200):
+        grid_print(l)
+    #for i in d:
+        #grid_print(i) if Drawable.hor else grid_print(i)
     """
     print()
     for p in range(len(Pattern.all)):

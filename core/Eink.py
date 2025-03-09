@@ -53,16 +53,11 @@ class Eink(EinkBase):
     def invert_ram(self, bw=True, red=True):
         '''invert 1 and 0s in the ram'''
         b = 0
-        if not self.ram_inv:
-            b += 1 << 3 if bw else 0
-            b += 1 << 7 if red else 0
-            self.ram_inv = True
-        else:
-            self.ram_inv = False
+        b += 1 << 3 if bw else 0
+        b += 1 << 7 if red else 0
         self._send(0x21, b)
 
     def show_ram(self):
-        ''' convinience function for testing '''
         self._updt_ctrl_2()
         self._send_command(0x20)
         self._read_busy()

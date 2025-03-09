@@ -30,17 +30,13 @@ class EPD2IN9(Eink):  # SSD1680
     darkgray = 0b10
     lightgray = 0b11
     x_set = '2B'
-    breg = b"\x03\x02\x00\x01\xe6\xe5'\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\x1c\xffZ\x91\xc7\xff\xff\xff\xf4\xff"
+    breg = b"\x03\x02\x00\x01\xe6\xe5'\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\x1c\xffZ\x91\xc7\xff\xff\xff\xf4\xff\x01"
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 296
         self.ic_side = 128
         #self._seqs = b'\x03\x02\x00\x01'  # structure ( 0°, 90°, 180°, 270°)
         super().__init__(spi, *args, **kwargs)
-
-    def _virtual_width(self, num=None):
-        ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
 if __name__ == "__main__":
     from machine import Pin, SPI

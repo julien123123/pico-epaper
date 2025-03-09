@@ -24,6 +24,7 @@ class Epdreg:
         ('ld_temp_gr', 1),
         ('upd2_gr',1),
         ('lut_gr',1),
+        ('v_width', 1)
     ]
 
     @classmethod
@@ -46,7 +47,7 @@ class Epdreg:
         print(")")
 
     def __init__(self, name, seq, clr_ram_blk, clr_ram_wt, gate_nb, gate_v, source_v, st_vcom, soft_start, upd2_norm, lut_norm, upd2_part, lut_part, wr_temp_quick,
-                 ld_temp_quick, upd2_quick, lut_quick, wr_temp_gr, ld_temp_gr, upd2_gr, lut_gr):
+                 ld_temp_quick, upd2_quick, lut_quick, wr_temp_gr, ld_temp_gr, upd2_gr, lut_gr, v_width):
         self.name = name
         self.seq = seq
         self.clr_ram_blk = clr_ram_blk
@@ -68,6 +69,7 @@ class Epdreg:
         self.ld_temp_gr = ld_temp_gr
         self.upd2_gr = upd2_gr
         self.lut_gr = lut_gr
+        self.v_width = v_width
         self._checklen()
         self.genindices()
 
@@ -129,6 +131,7 @@ Epd4IN2 = Epdreg(
 	ld_temp_gr =  0x91,# span = 1
 	upd2_gr =  0xcf,# span = 1
 	lut_gr =  0xff,# span = 1
+    v_width= 1
 )
 
 Epd3IN7 = Epdreg(
@@ -153,6 +156,7 @@ Epd3IN7 = Epdreg(
 	ld_temp_gr = 0xff,# span = 1
 	upd2_gr = 0xc7,# span = 1
 	lut_gr = 0,# span = 1
+    v_width= 0,
 )
 
 Epd2IN9 = Epdreg(
@@ -177,6 +181,7 @@ Epd2IN9 = Epdreg(
 	ld_temp_gr = 0xff,# span = 1
 	upd2_gr = 0xf4,# span = 1
 	lut_gr = 0xff,# span = 1
+    v_width= 1,
 )
 
 Epd1IN54 = Epdreg(
@@ -201,6 +206,7 @@ Epd1IN54 = Epdreg(
 	ld_temp_gr = 0x91,# span = 1
 	upd2_gr = 0xcf,# span = 1
 	lut_gr = 0xff,# span = 1
+    v_width=1,
 )
 
 """
@@ -230,6 +236,7 @@ Epd1IN54 = Epdreg(
 	ld_temp_gr = ,# span = 1
 	upd2_gr = ,# span = 1
 	lut_gr = ,# span = 1
+	v_width = , # span = 1
 )
 """
 # Commands

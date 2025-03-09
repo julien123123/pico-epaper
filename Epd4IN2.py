@@ -27,23 +27,16 @@ import framebuf
 from core.Eink import Eink
 from ustruct import pack
 
-class EPD4IN2(Eink): #SSD1683 GDEY042T81 (not for the T2)
+class EPD4IN2(Eink): #SSD1683 GDEY042T81 GY-E042A87 (not for the T2)
     x_set = '2B'
     white = 0b01
     darkgray = 0b10
     lightgray = 0b11
-    breg = b'\x03\x01\x00\x02\xe6f+\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xff\xffn\x91\xc7\xffZ\x91\xcf\xff'
-
+    breg = b'\x03\x01\x00\x02\xe6f+\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xff\xffn\x91\xc7\xffZ\x91\xcf\xff\x01'
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 300
         self.ic_side = 400
-        #self._seqs = b'\x03\x01\x00\x02'  # structure ( 0°, 90°, 180°, 270°) 3605  framebuf | DirectDraw (3102)
-        #self.x2 = True
         super().__init__(spi, *args, **kwargs)
-
-    def _virtual_width(self, num=None):
-        ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
 if __name__ == "__main__":
     from machine import Pin, SPI
@@ -53,7 +46,7 @@ if __name__ == "__main__":
 
 
     p = Pin(27, Pin.OUT)
-    epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=None)
+    epdSPI = SPI(0, sck=Pin(2), mosi=Pin(3), miso=Pin(4))
     epd = EPD4IN2(rotation=180, spi=epdSPI, cs_pin=Pin(1), dc_pin=Pin(26), reset_pin=p, busy_pin=Pin(28))
 
     big = numr110H if not epd._sqr else numr110V
@@ -64,11 +57,12 @@ if __name__ == "__main__":
     epd.draw.rect(350,250,50,50)
     epd.draw.fill(c=3, diff=True, key = 1, invert = False)
     epd.show()
-    epd(2, mode = epd.quick)
+    epd(1, mode = epd.quick)
     epd.draw.text('44', big, 0 , 0)
     epd.draw.ellipse(90, 70, 120, 100, f= True)
-    epd.draw.fill(c=20, invert=True, diff = True)
+    #epd.draw.fill(c=20, invert=True, diff = True)
     epd.show(key = 0)
+    """
     epd(mode = epd.part, pingpong = False)
     epd.draw.fill(c=11,key = -1, diff =True) 
     epd.draw.text('SY', big, 20, 20)
@@ -76,7 +70,7 @@ if __name__ == "__main__":
     epd.draw.text('hello?', smol, 100, 20)
     epd.show()
     epd.show_ram()
-    """
+    
     epd(1, mode = epd.quick)
     epd.sleep()
     epd.reinit()

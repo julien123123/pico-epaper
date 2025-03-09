@@ -31,17 +31,13 @@ class EPD1IN54(Eink):  # SSD1681
     white = 0b01
     darkgray = 0b10
     lightgray = 0b11
-    breg = b'\x03\x01\x00\x02\xe6\xe5\xc7\x00\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xfc\xffd\x91\xc7\xffZ\x91\xcf\xff'
+    breg = b'\x03\x01\x00\x02\xe6\xe5\xc7\x00\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xfc\xffd\x91\xc7\xffZ\x91\xcf\xff\x01'
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 200
         self.ic_side = 200
-        self._seqs = b'\x03\x01\x00\x02' # structure ( 0°, 90°, 180°, 270°) framebuf mode good vals (3, 6, 0, 5)
+        #self._seqs = b'\x03\x01\x00\x02' # structure ( 0°, 90°, 180°, 270°) framebuf mode good vals (3, 6, 0, 5)
         super().__init__(spi, *args, **kwargs)
-
-    def _virtual_width(self, num=None):
-        ''' returns width the way it is sent to the chip'''
-        return self.width // 8 if num is None else 0 if num is 0 else  num // 8
 
 if __name__ == "__main__":
     from machine import Pin, SPI

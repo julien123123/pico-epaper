@@ -129,16 +129,34 @@ class DirectMode:
         d = draw.Ellipse(x, y, xr, yr, c, f, m)
         self._ram_logic(d, diff)
 
-    def poly(self, x, y, coords, c=None, f=False):
-        raise NotImplementedError
-        #c = self.Eink.black if not c else c
-        #pass
+    def poly(self, coords, c=None, f=False, diff = False):
+        c = self.Eink.black if not c else c
+        d = draw.Poly(coords, c, f)
+        self._ram_logic(d, diff)
+
+    @staticmethod
+    def get_poly_size(coords):
+        d = draw.Poly(coords, 0, False, False)
+        x, y, heigh, width = d.x, d.y, d.height, d.width
+        del d
+        return x, y, heigh, width
 
     def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True, v_rev = True):
         #x y are always at the top left of the text line
         c = self.Eink.black if not c else c
         d = draw.ChainBuff(text, font, x, y, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert, v_rev=v_rev)
         self._ram_logic(d, diff)
+
+    @staticmethod
+    def txtlen(string, font, spacing=False, fixed_width=False):
+            tlen = sum(font.get_ch(ch)[2] for ch in string) if not fixed_width else fixed_width * len(string)
+            if spacing:
+                tlen += spacing * (len(string) - 1)
+            return tlen
+
+    @staticmethod
+    def txtheight(font):
+        return font.height()
 
     def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False, reverse = False):
         d = draw.Prerendered(x, y, h, w, buf, 1, invert=invert, reverse=reverse)
@@ -163,6 +181,12 @@ class DirectMode:
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None
         return buf_bw, buf_red
+
+    def export_into(self, buf, full = False, flush = True, key = -1, bw = True, red = False):
+        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
+        draw.Drawable.draw_all_into(buf, key, bw, red)
+        setattr(self, 'ram_fl', 0) if flush else None
+        draw.Drawable.flush() if flush else None
 
     def send_to_disp(self, full= False, flush = True, key = -1):
         """Function to send the current buffer to the display without triggering an update"""

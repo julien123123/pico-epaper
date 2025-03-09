@@ -165,6 +165,13 @@ class EinkBase:
             abs_y = y
         return abs_x, abs_y
 
+    def _virtual_width(self, num = None):
+        """ Returning width whether the epd whant it in bytes or absolute numbers"""
+        if self.breg[31]:
+            return num // 8 if num is not None else self.width //8
+        else:
+            return num if num is not None else self.width
+
     # --------------------------------------------------------
     # Dummy Methods that get overridden by child classes
     # --------------------------------------------------------
@@ -172,9 +179,6 @@ class EinkBase:
         raise NotImplementedError
 
     def _send_data(self, data):
-        raise NotImplementedError
-
-    def _virtual_width():
         raise NotImplementedError
 
     # --------------------------------------------------------

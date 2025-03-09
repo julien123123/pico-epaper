@@ -95,7 +95,7 @@ class EPDPico(Eink):  # SSD1677
     darkgray = 0b01
     lightgray = 0b10
     x_set = '2H'
-    breg = b'\x03\x02\x00\x01\xe6\xf7\xdf\x01\x00\x00A\xa82D\xae\xc7\xc3\xc0\xc0\xf7\x01\xff\x02\xff\xff\xc7\x00\xff\xff\xc7\x00'
+    breg = b'\x03\x02\x00\x01\xe6\xf7\xdf\x01\x00\x00A\xa82D\xae\xc7\xc3\xc0\xc0\xf7\x01\xff\x02\xff\xff\xc7\x00\xff\xff\xc7\x00\x00'
 
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 480
@@ -107,9 +107,6 @@ class EPDPico(Eink):  # SSD1677
                       EPD_3IN7_lut_1Gray_A2)
         super().__init__(spi, *args, **kwargs)
 
-    def _virtual_width(self, num=None):
-        ''' returns width the way it should be sent to the chip'''
-        return self.width if num is None else 0 if num is 0 else num
 
 if __name__ == "__main__":
     from machine import SPI, Pin
