@@ -1,0 +1,3 @@
+from uEPD.Eink import EPD2IN9, EPD1IN54, EPD4IN2, EPD3IN7
+
+__all__ = ['EPD2IN9', 'EPD1IN54', 'EPD4IN2', 'EPD3IN7']

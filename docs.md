@@ -1,12 +1,19 @@
 # Epd Classes
 ```python
 from machine import Pin, SPI
-import Epd4IN2
+from uEPD import EPD4IN2
 epdspi = SPI(2, sck=Pin(12), mosi=Pin(11), miso=None) #Spi object, miso is not needed
-epd = Epd4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=Pin(15), busy_pin=Pin(16), hold = False)
+epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=Pin(7), dc_pin=Pin(5), reset_pin=Pin(15), busy_pin=Pin(16), hold = False)
 ```
+### Classes available:
+- EPD1IN54
+- EPD2IN9
+- EPD3IN7
+- EPD4IN2
+
+Pick the one that corresponds to your display.
 ### Constructor arguments:
-- `rotation: int` accepts 0, 90, 180, 270 degrees. 0 degress is always in the orientation where the driver chip is at the bottom
+- `rotation: int` accepts 0, 90, 180, 270 degrees. 0 degress is always in the orientation where the driver chip is at the bottom. The bytes of the buffer are usually aligned with the chip.
 - `spi` SPI object. Most modules don't have a miso pin. If your mcu doesn't accept None, just use an unused pin.
 - `cs_pin`, `dc_pin`, `reset_pin`, `busy_pin` accept machine.Pin objects. They are the pins you are using from your Eink modules to your microcontroller.
 - `hold`[*bool*, default = *True*] If true, ram in epd IC will be retained.
@@ -249,7 +256,19 @@ The parameters are exactly the same as the show() method.
 Use show_ram() to refresh the display when you are done.
 
 >[!NOTE]
->  The display ram dont have any transparency, if you send a buffer to the display RAM, you override what was there before.
+>  The display ram doesn't have any transparency, if you send a buffer to the display RAM, you override what was there before.
+
+### txtlen("String", font, spacing=False, fixed_width=False)
+
+Parameters are the same as text, it returns the pixel width of a given string in a given font.
+
+### txtheight(font)
+
+Returns the font height.
+
+### get_poly_size(coords)
+
+Returns int values of x, y, width, height of a polygon with the given coordinates.
 
 *See show_ram example
 # Other examples
@@ -268,14 +287,15 @@ epd(nbuf = 2, mode = epd.part, pingpong = True) # Putting the epd in partial mod
 epd.draw.text(text = "12:34", font = freesans20, x = 20, y = 20, diff = True) # Sending these pixels to differential to be erased if not black in main ram
 epd.draw.text(text = "12:35", font = freesans20, x = 20, y = 20) # Sending actual image
 epd.show()
-epd.sleep
+epd.sleep()
 ```
 ### Creating a new pattern
-```python
-from core.draw import Pattern
 
-new_pattern = Pattern(*Pattern.append(b'\xaaU'), w = 1, h = 2) # This is the same as the checkers pattern
-epd.draw.fill(c = 24) # This new pattern will be appended after the default ones
+```python
+from uEPD.draw import Pattern
+
+new_pattern = Pattern(*Pattern.append(b'\xaaU'), w=1, h=2)  # This is the same as the checkers pattern
+epd.draw.fill(c=24)  # This new pattern will be appended after the default ones
 ```
 `Pattern.append()` returns the in an out of the main Pattern class bytearray. The patterns have to fit within 8bits bytes,
 and the parameters `w` for width and `h` for height are the minimum amount of byte it takes for the pattern to repeat.

@@ -1,28 +1,12 @@
-import core.draw as draw
-from core.draw import Drawable
+import uEPD.draw as draw
+from uEPD.draw import Drawable
 
 # --------------------------------------------------------
 # Drawing routines (directly to the display).
 # --------------------------------------------------------
-#
-# bw_ram parameter can be False to use 2 different buffers under monochrome (self.monoc) mode or to send the drawing
-# to the differential (eraser) buffer under partial update mode.
-
-# self._sqr = image width square to byte layout of gates of the display
-# not self._sqr = image width aligned with the bytes of the display
-# bytes of the display are usually aligned with the side where the chip is (the mirror rectangle in the white goo)
-
 BW1B = const(0) # black and white with 1 buffer in black and white ram
-
 BW2X = const(1) # black and white with 2 copy of the same buffer in black and white ram and red ram
-# This mode might only work because in normal update mode, the white in bw ram is opaque, and the black is
-# transparent to what's in the red ram voiding red ram achieves the same thing. Many of the drivers I found
-# used this formula for full updates. That's why I included it here.
-
 BW2B = const(2) # black and white with 2 different buffers in black and white and red ram
-# BW2B works with ping pong buffers, where 2 buffers get shown and updated alternately, and partial mode, where red ram
-# is used to erase the black ram. In that case, red ram is not necessarily updated.
-
 G2B = const(3)  # grayscale with 2 different buffers in black and white and red ram
 
 class DirectMode:
@@ -32,7 +16,6 @@ class DirectMode:
         self.ram_fl= 0
         self.mode = mode
         self.hor = hor
-
         draw.Drawable.hor = self.hor
 
     def _set_frame(self):
