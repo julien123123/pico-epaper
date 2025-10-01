@@ -22,6 +22,7 @@ class Drawable:
     xspan = [None, None]
     yspan = [None, None]
     background = [0xff, 0xff]
+    set = False
 
     @classmethod
     def c_width(cls):
@@ -37,13 +38,12 @@ class Drawable:
         if red_ram and black_ram:
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
+        for fil in cls.fll:
+            fil.setup() if fil.ram_flag & ram_chk else None
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = cls.c_width()+1
         total_height = cls.c_height()
         cls.main_row_pointer = cls.yspan[0]
-
-        for fil in cls.fll:
-            fil.setup() if fil.ram_flag & ram_chk else None
 
         for line in range(total_height):
             row = bytearray([cls.background[0 if black_ram else 1]]*row_w)
@@ -88,16 +88,17 @@ class Drawable:
         if int(red_ram) and int(black_ram):
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
+        if not cls.set:
+            for fil in cls.fll:
+                fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
+            cls.main_row_pointer = cls.yspan[0]
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = int(cls.c_width()) + 1
         total_height = int(cls.c_height())
         bufh = lenbuf // row_w
         max_buf_h = min(int(bufh), total_height-int(cls.main_row_pointer))
-        cls.main_row_pointer = cls.yspan[0] if int(cls.main_row_pointer) == 0 else int(cls.main_row_pointer)
         xspan0 = int(cls.xspan[0])
-
-        for fil in cls.fll:
-            fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
+        cls.set = True
 
         for line in range(int(max_buf_h)):
             lnst = line*row_w
@@ -148,6 +149,7 @@ class Drawable:
         cls.xspan = [None, None]
         cls.yspan = [None, None]
         cls.background = [0xff, 0xff]
+        cls.set = False
 
     @classmethod
     def reset(cls):
@@ -899,7 +901,7 @@ class Filler(Drawable):
             raise ValueError("Must have a key that is either 0 or 1")
         bwidth = (self.shift + self.w +7) // 8
         rem = (self.shift + self.w)%8
-        g = self.pattern.fill(bwidth, self.h, self.invert)
+        g = self.pattern.fill(bwidth, self.h, False)
         for r in range(self.h):
             b = next(g)
             if self.shift:
@@ -907,6 +909,7 @@ class Filler(Drawable):
                 b[0] = b[0] | first if not self.key else b[0] ^ first
             if rem:
                 b[-1] = b[-1] | (1 << (8-rem))-1 if not self.key else b[-1] ^ (1 << (8-rem))-1
+            invert_bytes(b, len(b)) if self.invert else None
             yield b
 
     def _fill(self):

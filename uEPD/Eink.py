@@ -9,6 +9,7 @@ class EinkBase:
     white = 0
     darkgray = 0
     lightgray = 0
+    # Modes
     norm = const(0)
     quick = const(1)
     part = const(2)

@@ -65,10 +65,10 @@ class DirectMode:
                     self.Eink._send_data(ba)
 
     def _ram_logic(self, obj, diff):
-        if self.mode in (BW1B, G2B, BW2X) or (self.mode is BW2B and not diff):
+        if self.mode in (BW1B, BW2X) or (self.mode in (G2B, BW2B) and not diff):
             obj.ram_flag |= 0b01
             self.ram_fl |= 0b01
-        if self.mode is G2B or (self.mode is BW2B and diff):
+        if self.mode in (G2B, BW2B) and diff:
             obj.ram_flag |= 0b10
             self.ram_fl |= 0b10
 
@@ -165,11 +165,16 @@ class DirectMode:
         draw.Drawable.flush() if flush else None
         return buf_bw, buf_red
 
-    def export_into(self, buf, full = False, flush = True, key = -1, bw = True, red = False):
+    def export_into(self, buf, full = False, flush = True, key = -1, red = False, bw = True):
         draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
-        draw.Drawable.draw_all_into(buf, key, bw, red)
+        d = draw.Drawable.draw_all_into(buf, len(buf), key, red, bw)
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else None
+        return d
+
+    def flush(self):
+        self.ram_fl = 0
+        draw.Drawable.flush()
 
     def send_to_disp(self, full= False, flush = True, key = -1):
         """Function to send the current buffer to the display without triggering an update"""

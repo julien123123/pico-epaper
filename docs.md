@@ -302,3 +302,9 @@ and the parameters `w` for width and `h` for height are the minimum amount of by
 > [!TIP]
 > Creating patterns directly in your ide is easier using binary notation like so `bytearray([0b00000000])`, or you can use
 > an image editor that's able to export xbm files, and edit pixels in black and white.
+
+## Patterns
+
+Here is a picture of all available patterns with their numbers generated with this library [(see this example)](examples/patterns.py):
+
+![patterns](img/patterns.png)
