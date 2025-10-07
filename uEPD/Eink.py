@@ -17,7 +17,7 @@ class EinkBase:
     x_set = 0  # format to send x width to the display
     modes = (norm, quick, part, gray4)
 
-    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, hold = False):
+    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, hold = False, init=True):
         if rotation in (0,180):
             self.width = self.ic_side
             self.height = self.sqr_side
@@ -50,7 +50,7 @@ class EinkBase:
 
         self._partial = False
 
-        self._init_disp()
+        self._init_disp() if init else None
         sleep_ms(500)
 
     def _sort_ram(self):

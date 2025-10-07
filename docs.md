@@ -223,7 +223,7 @@ epd.show()
 > [!TIP]
 > For faster rendering time, you can pre-invert the colour of your fonts, and pre-invert the bytes if your font is vertical.
 
-### 10. blit(fbuf, x, y, key=-1, ram=RAM_RBW, reverse = False, invert = False, diff = False, reverse = False)
+### 10. blit(x, y, buf, w, h, ram = 0, invert= False, diff = False, reverse = False)
 - `blit` will just send a pre-rendered buffer directly to the display
 - `invert`[*bool*, defaults to *False*] Inverts the colour of the given buffer.
 - `reverse` [*bool*, defaults to *False*] Option to revert the byte order of your buffer. This is espacially heplful if it doesn't display proprely in vertical orientation.
