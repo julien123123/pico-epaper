@@ -33,6 +33,8 @@ I'm in the process of creating the examples.
 
 You can find all the documentations about how this library works [here](/docs.md)
 
+If you want to make your own driver for you display, and the display's driver IC is in the SSD family, see the [epd_maker documentation](/epd_maker.md)
+
 ---
 
 ## Installation

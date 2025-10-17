@@ -211,7 +211,7 @@ Epd1IN54 = Epdreg(
 
 """
 [insert name] = Epdreg(
-    name = ,
+	name= ,
 	seq = ,# span = 4
 	clr_ram_blk = ,# span = 1
 	clr_ram_wt = ,# span = 1
@@ -219,13 +219,9 @@ Epd1IN54 = Epdreg(
 	gate_v = ,# span = 1
 	source_v = ,# span = 3
 	st_vcom = ,# span = 1
-	soft_start= ,#span = 5
-	wr_temp_norm = ,# span = 1
-	ld_temp_norm = ,# span = 1
+	soft_start = ,# span = 5
 	upd2_norm = ,# span = 1
 	lut_norm = ,# span = 1
-	wr_temp_part = ,# span = 1
-	ld_temp_part = ,# span = 1
 	upd2_part = ,# span = 1
 	lut_part = ,# span = 1
 	wr_temp_quick = ,# span = 1
@@ -236,7 +232,7 @@ Epd1IN54 = Epdreg(
 	ld_temp_gr = ,# span = 1
 	upd2_gr = ,# span = 1
 	lut_gr = ,# span = 1
-	v_width = , # span = 1
+	v_width = ,# span = 1
 )
 """
 # Commands
