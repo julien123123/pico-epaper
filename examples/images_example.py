@@ -17,7 +17,7 @@ epd = EPD4IN2(rotation=0, spi=epdSPI, cs_pin=CS, dc_pin=DC, reset_pin=RST, busy_
 
 epd(2, mode=epd.gray4)
 
-epd.draw.blit(0,0, henderson.bw, henderson.width, henderson.height, diff = True, reverse=True)
-epd.draw.blit(0,0, henderson.red, henderson.width, henderson.height, reverse=True)
+epd.draw.blit(0,0, henderson.bw, henderson.width, henderson.height, reverse=True)
+epd.draw.blit(0,0, henderson.red, henderson.width, henderson.height, diff = True, reverse=True)
 epd.show(full = True)
 epd.sleep()

@@ -141,8 +141,8 @@ class DirectMode:
     def txtheight(font):
         return font.height()
 
-    def blit(self, x, y, buf, w, h, ram = 0, invert= False, diff = False, reverse = False):
-        d = draw.Prerendered(x, y, h, w, buf, 1, invert=invert, reverse=reverse)
+    def blit(self, x, y, buf, w, h, c = 0, invert= False, diff = False, reverse = False):
+        d = draw.Prerendered(x, y, h, w, buf, c, invert=invert, reverse=reverse)
         self._ram_logic(d, diff)
 
     def show(self,full = False, flush = True, key = -1):
@@ -153,7 +153,7 @@ class DirectMode:
         self.Eink._send_command(0x20)
         self.Eink._read_busy()
         setattr(self, 'ram_fl', 0) if flush else None
-        draw.Drawable.flush() if flush else None
+        draw.Drawable.flush() if flush else Drawable.reset()
 
     def export(self, full = False, flush = True, key = -1, bw = True, red = False):
         """Returns the results of Drawable.draw_all in a buffer"""
@@ -162,14 +162,14 @@ class DirectMode:
         buf_red = (bytearray(b''.join(draw.Drawable.draw_all(key, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
 
         setattr(self, 'ram_fl', 0) if flush else None
-        draw.Drawable.flush() if flush else None
+        draw.Drawable.flush() if flush else Drawable.reset()
         return buf_bw, buf_red
 
     def export_into(self, buf, full = False, flush = True, key = -1, red = False, bw = True):
         draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
         d = draw.Drawable.draw_all_into(buf, len(buf), key, red, bw)
         setattr(self, 'ram_fl', 0) if flush else None
-        draw.Drawable.flush() if flush else None
+        draw.Drawable.flush() if flush else Drawable.reset()
         return d
 
     def flush(self):

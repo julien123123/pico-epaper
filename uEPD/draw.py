@@ -567,7 +567,7 @@ class Rect(Drawable):
 
 
 class Ellipse(Drawable):
-    def __init__(self,xradius, yradius, x, y, color, f = False, m = 0b1111):
+    def __init__(self, x, y, xradius, yradius, color, f = False, m = 0b1111):
         self.xr = xradius if Drawable.hor  else yradius
         self.yr = yradius if Drawable.hor  else xradius
         self.fill = f

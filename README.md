@@ -18,8 +18,8 @@ you may still use the FrameBuffer class to draw on the display.
 Here are the currently supported displays:
 - 1.54" 200x200 with SSD1681 driver  GDEY0154D67
 - 2.9" 296x128 with SSD1680 driver GDEY029T94
-- 3.7" 540x960 with SSD1677 driver ED037TC1
-- 4.2" 400x300 with SSD1683 driver GDEW042T2 / GY-E042A87 (no fast mode)
+- 3.7" 480x280 with SSD1677 driver ED037TC1
+- 4.2" 400x300 with SSD1683 driver GDEW042T81 / GY-E042A87 (no fast mode)
 
 *If your display is not listed, you can try to use the driver for the closest resolution and driver. It may work, but it 
 may not. Using the other epd files as a reference, you can try to make your own driver.
