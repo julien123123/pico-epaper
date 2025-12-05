@@ -1,6 +1,6 @@
-import micropython
 import utime
 from struct import pack, unpack
+from array import array
 
 def timed_function(f, *args, **kwargs):
     print(f)
@@ -186,7 +186,7 @@ class Drawable:
         self.x = x
         self.y = y
         self.c = color
-        self.cc = color & 1
+        self.cc = color & 1 #Current color
         self.shift = x%8 if Drawable.hor else y%8
         self.actual_x = x - self.shift if Drawable.hor else y - self.shift
         self.actual_y = y if Drawable.hor else x
@@ -238,7 +238,7 @@ class Pixel(Drawable):
     def __init__(self, x, y, color):
         super().__init__(x, y, color)
         self.byte = 0
-        self.setup()
+        self.setufp()
         self._parse()
 
     @property
@@ -335,7 +335,7 @@ class Poly(Drawable):
         self.fill = fill
         self.nedges = len(self.p)
         super().__init__(self.x , self.y, c)
-        self.bwidth = (self.shift + self.width + 7)//8
+        self.bwidth = (self.shift + self.width + 8)>>3
         #self._fill_polygon()
         self._parse() if parse else None
 
@@ -702,7 +702,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
         self.fixed_w = fixed_w if fixed_w != 'max' else font.max_width()
         self.font = font
         self.chr_l = []
-        self.w_l = bytearray()
+        self.w_l = array('H',[])
         self.invert = invert
         self.v_rev = v_rev # revert when vertical
 
@@ -716,8 +716,8 @@ class ChainBuff(Drawable): #mainly for writing fonts
     def width(self):
         ttl = 0 if Drawable.hor  else self.font.height()
         if Drawable.hor :
-            nb = int(len(self.w_l)/2)
-            ttl+= sum(unpack(f'{int(nb)}H', self.w_l)) if not self.fixed_w else self.fixed_w*nb
+            nb = len(self.w_l)
+            ttl += sum(self.w_l) if not self.fixed_w else self.fixed_w*nb
             ttl += self.spacing * (nb-1)
         return ttl
 
@@ -726,36 +726,37 @@ class ChainBuff(Drawable): #mainly for writing fonts
         ttl = 0 if not Drawable.hor  else self.font.height()
         if not Drawable.hor :
             nb = int(len(self.w_l) / 2)
-            ttl += sum(unpack(f'{nb}H', self.w_l)) if not self.fixed_w else self.fixed_w * nb
+            ttl += sum(self.w_l) if not self.fixed_w else self.fixed_w * nb
             ttl += self.spacing * (nb - 1)
         return ttl
 
     @property
     def bwidth(self): # just width works if x is not already a multiple of 8
         """ byte width """
-        return ((self.shift+self.width+7)//8) if Drawable.hor  else self.font.height()
+        return ((self.shift+self.width+7)>>3) if Drawable.hor  else self.font.height()
 
     @property
     def bheight(self):
         """ byte height """
-        return self.font.height() if Drawable.hor  else ((self.shift+self.height+7)//8)*8
+        return self.font.height() if Drawable.hor  else ((self.shift+self.height+7)>>3)<<3
 
     def setup(self):
+        self.cc = (self.c & 1) ^ 1 if self.invert else self.cc
         for ltr in self.st:
             gl = self.font.get_ch(ltr)
             self.chr_l.append(gl[0])
-            self.w_l.extend(pack('H', gl[2]))
+            self.w_l.append(gl[2])
 
     def draw(self):
         if Drawable.hor :
             for ln in range(self.height):
                 args = []
-                ba = bytearray([0xff if self.cc else 0]*(self.bwidth))
-                for f in range(len(self.chr_l)):
-                    w = (unpack('H',self.w_l[f*2:f*2+2])[0]+7)//8
-                    line = memoryview(self.chr_l[f][ln*w:ln*w+w])
+                ba = bytearray([0xff if not self.cc else 0]*self.bwidth)
+                for i, f in enumerate(self.chr_l):
+                    w = (self.w_l[i]+7) >> 3
+                    line = memoryview(f[ln*w:ln*w+w])
                     args.append(line)
-                self.linec2(args, ba)
+                self.linec(args, ba)
                 invert_bytes(ba, len(ba)) if self.invert else None
                 yield ba
         else: # Vertical
@@ -764,7 +765,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
 
             bkg = 0 if self.cc else 0xff
             for e, elem in enumerate(self.chr_l):
-                w = unpack('H', self.w_l[e*2:e*2+2])[0]
+                w = self.w_l[e]
                 delta = self.fixed_w - w if self.fixed_w else 0
                 for line in l_by_l(elem, self.font.height(), w):
                     line = bytearray(line)
@@ -778,41 +779,17 @@ class ChainBuff(Drawable): #mainly for writing fonts
                     for _ in range(self.spacing + delta):
                         yield bytearray([bkg]*self.bwidth)
 
-
-    @micropython.native
-    def linec(self,*linesw:object)->object:
-        cursor:int = int(self.shift)
-        r:object = bytearray([0xff if self.cc else 0]*int(self.bwidth-1)) #complete row
-        for dx, lines in enumerate(linesw):
-            width:int = int(unpack('H', self.w_l[dx*2:dx*2+2])[0])
-            if dx>0:
-                cursor += int(self.spacing)
-                if cursor%8:
-                    row:object = shiftr(lines, len(lines), cursor%8, self.cc)
-                    first:int = int(cursor)//8
-                    r[first] = int(r[first]) | int(row[0]) # This works for font_to_py fonts, but might not for other fonts
-                    r[first+1:first+int(len(row))] = row[1:]
-                else:
-                    r[cursor//8:cursor//8+int(len(lines))] = lines[:]
-            else:
-                row:object = shiftr(lines, len(lines), self.shift, self.cc) if self.shift else lines
-                r[0:int(len(row))] = row[:]
-            cursor += width if not self.fixed_w else self.fixed_w
-        invert_bytes(r, len(r)) if self.invert else None # Invert the bytes in r object, no need to create a new one
-        #reverse_bits(r, len(r))
-        return r
-
     @micropython.viper
-    def linec2(self,linesw:object, ba:ptr8)->object:
+    def linec(self,linesw:object, ba:ptr8)->object:
         ptr8(self.w_l)
         cursor:int = int(self.shift)
         for dx, lines in enumerate(linesw):
-            width:int = int(self.w_l[int(dx)*2])  | int(self.w_l[int(dx)*2+1]) << 8
-            if int(dx)>0:
+            width:int = int(self.w_l[int(dx)])
+            if int(dx) != 0:
                 cursor += int(self.spacing)
-                first: int = int(cursor) // 8
+                first: int = int(cursor) >> 3
                 if cursor%8:
-                    row:object = shiftr(lines, int(len(lines)), cursor%8, self.cc)
+                    row:object = shiftr(lines, len(lines), width, cursor%8, self.cc)
                     ba[first] = int(ba[first]) | int(row[0]) # This works for font_to_py fonts, but might not for other fonts
                     for b in range(1, int(len(row))):
                         ba[b+first] = int(row[b])
@@ -820,17 +797,16 @@ class ChainBuff(Drawable): #mainly for writing fonts
                     for b in range(int(len(lines))):
                         ba[b+first] = int(lines[b])
             else:
-                row = shiftr(lines, len(lines), self.shift, self.cc) if self.shift else lines
-                for b in range(int(len(row))-1):
-                    ba[b] = int(lines[b])
-                    pass
-                pass
+                row = shiftr(lines, len(lines), width, self.shift, self.cc) if self.shift else lines
+                for i , byt in enumerate(row):
+                    ba[int(i)] = int(byt) & 0xff
             cursor += width if not self.fixed_w else int(self.fixed_w)
 
 
     def reset_draw(self):
         self.chr_l = []
-        self.w_l = bytearray()
+        self.w_l = array('H', [])
+        self.cc = self.c & 1
         super().reset_draw()
 
 
@@ -840,10 +816,10 @@ class Prerendered(Drawable):
         self.buff = buff
         self.h = h
         self.w = w
-        self.setup()
         self.rem = (self.w + self.shift) % 8 if Drawable.hor  else (self.h + self.shift) % 8
         self.inv = invert
         self.rev = reverse
+        self.setup()
         self._parse()
 
     @property
@@ -855,14 +831,15 @@ class Prerendered(Drawable):
         return self.h if Drawable.hor  else self.w
 
     def setup(self):
-        pass
+        self.cc = (self.c & 1) ^ 1 if self.inv else self.cc
 
     def draw(self):
         r = l_by_l(self.buff, self.w, self.h) if Drawable.hor else l_by_l(self.buff, self.h, self.w)
         for ln in r:
             invert_bytes(ln, len(ln)) if self.inv else None
             reverse_bits(ln, len(ln)) if self.rev else None
-            yield shiftr(ln, len(ln), self.shift, self.cc) if self.shift and Drawable.hor else shiftl(ln, len(ln), self.shift, self.cc) if self.shift and not Drawable.hor else ln
+            pad_right(ln, len(ln), self.w, self.cc) if not self.shift and Drawable.hor else None
+            yield shiftr(ln, len(ln), self.w,  self.shift, self.cc) if self.shift and Drawable.hor else shiftl(ln, len(ln), self.shift, self.cc) if self.shift and not Drawable.hor else ln
 
 class Filler(Drawable):
     def __init__(self, x = None, y = None, w = None, h = None, color = 1, key = -1, invert = False):
@@ -888,11 +865,11 @@ class Filler(Drawable):
             self.fn = self._mask()
             super().__init__(self.x, self.y, self.c)
         else:
-            self.x = Drawable.xspan[0]*8
-            self.w = (Drawable.c_width()+1)*8
+            self.x = Drawable.xspan[0] << 3
+            self.w = (Drawable.c_width()+1) << 3
             self.y = Drawable.yspan[0]
             self.h = Drawable.c_height()
-            self.fn = self.pattern.fill(self.w//8, self.h, self.invert) if self.pattern is not None else self._fill()
+            self.fn = self.pattern.fill(self.w >> 3, self.h, self.invert) if self.pattern is not None else self._fill()
             super().__init__(self.x, self.y, self.c)
         self.ram_flag = tmp_f
 
@@ -996,46 +973,72 @@ def l_by_l(buf, w, h):
 #--------------------------------------------------------------
 # Bit/Byte manipulation functions
 #--------------------------------------------------------------
+@micropython.viper
+def pad_right(ba:ptr8, lenba:int, w:int, c:int):
+    pad = 8 - (w & 7)
+    bpad = ((lenba <<3) - pad) >>3
+    if pad == 8 and bpad == 0:
+        return
+    if pad != 8:
+        mask = (1<<pad)-1
+        ba[lenba-1-bpad] = (int(ba[lenba-1-bpad]) & ~(mask&0xff)) if c else int(ba[lenba-1-bpad]) | mask
+    for i in range(bpad):
+        ba[lenba-1-i] = 0 if c else 0xff
 
 @micropython.viper
-def shiftr( ba: ptr8, lenba:int, val: int, c:int) -> object:
-    if val <=0:
-        raise ValueError('Number of bits must be positive and higher than 0')
-    byteshift = val//8
-    bitshift = val % 8
-    result = bytearray(lenba+byteshift+ (1 if bitshift > 0 else 0))
+def shiftr(buf:ptr8, lenbuf:int, w:int, shift:int, c:int)->object:
+    byte_sh = shift >> 3
+    bit_sh = shift & 7 # Same as %8
+    new = 1 if (bit_sh + (w &7)) >= 8 else 0
+    reslen = byte_sh + lenbuf + new
+    res:object = bytearray(reslen)
+    if not c:
+        for i in range(reslen):
+            res[i] = 0xff # if color is 0 bacground is a 1s
+    right_padding = 8 - ((bit_sh + w ) & 7)
+    pdmsk = (1<<right_padding) - 1
+    if not bit_sh:
+        for b in range(lenbuf):
+            res[b+byte_sh] = int(buf[b])
+        res[reslen-1] = int(res[byte_sh+lenbuf-1]) | pdmsk if not c else int(res[byte_sh+lenbuf-1]) & ~pdmsk
+        return res
     carry = 0
-    for i in range(lenba):
-        result[i + byteshift] = (int(ba[i]) >> bitshift) | carry
-        carry = (int(ba[i]) & ((1 << bitshift) -1)) << (8-bitshift)
-    if int(carry) > 0:
-        result[lenba+byteshift] = carry
-    if c:
-        for i in range(byteshift):
-            result[i] = 0xff
-        result[byteshift] = int(result[byteshift]) | (1 << bitshift)-1 << (8-bitshift)
-        result[-1] = int(result[-1]) | (1 << (8-bitshift))-1
-    return result
+    cr_msk = (1 << (8-bit_sh)) -1
+    sh_msk = 0xFF ^ cr_msk # (( 1 << bit_sh) - 1) << (8 - bit_sh)
+    for i in range(lenbuf):
+        shftd = (buf[i] >> bit_sh) & 0xff
+        if i == 0:
+            res[byte_sh+i] = shftd | sh_msk if not c else shftd #should not need to apply mask since shifting creates 0s on the left
+        else:
+            res[byte_sh+i] = (shftd & cr_msk) | (carry & sh_msk) # wrote for c = 0, but seems to be the same for c = 1
+        carry = (buf[i] << (8 - bit_sh)) & 0xff
+    #print(carry)
+    if new:
+        res[reslen-1] = carry
+    if pdmsk:
+        res[reslen-1] = int(res[reslen-1]) | pdmsk if not c else int(res[reslen-1]) & ~pdmsk
+    return res
 
 @micropython.viper
 def shiftl(ba:ptr8, lenba:int, val:int, c:int) -> object:
     if val <= 0:
         raise ValueError('Number of bits must be positive')
-    byteshift = val // 8
+    byteshift = val >> 3
     bitshift = val % 8
     lr = lenba + byteshift + (1 if bitshift > 0 else 0)
     result = bytearray(lr)
-    carry = 0
+    if not c:
+        for i in range(lr):
+            result[i] = 0xff
+    carry = 0 if c else ((1 << bitshift) -1) << bitshift
     for i in range(lenba-1, -1, -1):
         result[i+byteshift+(1 if bitshift > 0 else 0)] = int(ba[i] << bitshift) | carry
         carry = int(ba[i]) >> (8 - bitshift)
     if carry:
         result[byteshift] = carry
-    if c:
-        for i in range(byteshift):
-            result[i] = 0xff
-        result[byteshift] = int(result[byteshift]) | ((1<<(8-bitshift)) -1) << bitshift
-        result[-1] = int(result[-1]) | (1 << bitshift)-1
+    for i in range(byteshift):
+        result[-1-bitshift] = 0xff if not c else 0
+    result[0] = int(result[0]) | ((1 << bitshift)-1) << (8-bitshift) if not c else int(result[0]) ^ ((1 << bitshift)-1) << (8-bitshift)
     return result
 
 @micropython.viper

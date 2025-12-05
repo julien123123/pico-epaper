@@ -113,7 +113,7 @@ Epd4IN2 = Epdreg(
     name='Epd4IN2',
 	seq = b'\x03\x01\x00\x02',# span = 4
 	clr_ram_blk = 0xe6,# span = 1
-	clr_ram_wt = 0x66,# span = 1
+	clr_ram_wt = 0xe6,# span = 1
 	gate_nb = pack('hB', 299, 0),# span = 3
 	gate_v = 0xff,# span = 1
 	source_v = 0xff,# span = 3

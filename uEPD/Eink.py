@@ -40,18 +40,23 @@ class EinkBase:
         self.draw = dms.DirectMode(self, 0, not self._sqr)
 
         self._rst = reset_pin
-        self._rst.init(Pin.OUT, value=0)
         self._dc = dc_pin
-        self._dc.init(Pin.OUT, value=0)
         self._cs = cs_pin
-        self._cs.init(Pin.OUT, value=1)
         self._busy = busy_pin
-        self._busy.init(Pin.IN)
+        self._cs.init(Pin.OUT, value=1)
+        self.p_initd = False
 
         self._partial = False
 
         self._init_disp() if init else None
         sleep_ms(500)
+
+    def _init_pins(self):
+        self._rst.init(Pin.OUT, value=0)
+        self._dc.init(Pin.OUT, value=0)
+        
+        self._busy.init(Pin.IN, Pin.PULL_UP)
+        self.p_initd = True
 
     def _sort_ram(self):
         if self.draw.mode is dms.BW1B:
@@ -112,6 +117,8 @@ class EinkBase:
         self._read_busy()
 
     def _init_disp(self):
+        if not self.p_initd:
+            self._init_pins()
         # HW reset.
         self._reset()
 
@@ -132,16 +139,17 @@ class EinkBase:
         # Set border.
         self._send(0x3c, 0x03)
         # Booster Soft-start Control.
-        self._send(0x0c, self.breg[14:19]) if self.breg[14] is not 0xff else None
+        self._send(0x0c, self.breg[14:19]) if self.breg[14] is not 0xff and self.cur_md in(self.norm, self.gray4) else None
         # Internal sensor on.
         self._send(0x18, 0x80)
-
         # Set Vcom
         self._send(0x2c, self.breg[13]) if self.breg[13] is not 0xff else None
 
-        if self.cur_md & 1:
+        tmp_v = (0xff, self.breg[23], self.breg[27], self.breg[27])[self.cur_md]
+        self._send(0x1A, tmp_v) if tmp_v is not 0xff else None
+
+        if self.cur_md in (1, 2):
             # if mode is quick update or shades of gray, load these.
-            self._send(0x1A, self.breg[23]) if not self.cur_md & 0b10 and self.breg[23] is not 0xff else self.breg[27] if self.breg[27] is not 0xff else None# Write temp register
             self._send(0x22, self.breg[24]) if self.breg[24] is not 0xff else None  # Load temp value
             self._send_command(0x20)
             self._read_busy()
@@ -204,14 +212,14 @@ class EinkBase:
             # This always has 2 buffers
             self.draw.mode = dms.G2B
             self._partial = False
-
-        if rst_flag:
-            self.reinit()
-            if self._partial:
-                pp = 0x4f if self.pp else 0xf
-                self._send(0x37, pack('10B', 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
-        self._clear_ram() if not self.hold else None
-        self._sort_ram()
+        if self.p_initd:
+            if rst_flag:
+                self.reinit()
+                if self._partial:
+                    pp = 0x4f if self.pp else 0xf
+                    self._send(0x37, pack('10B', 0x00, 0xff, 0xff, 0xff, 0xff, pp, 0xff, 0xff, 0xff, 0xff))
+            self._clear_ram() if not self.hold else None
+            self._sort_ram()
 
     def reinit(self):
         self._init_disp()
@@ -345,7 +353,7 @@ class EPD4IN2(Eink): #SSD1683 GDEY042T81 GY-E042A87 (not for the T2)
     white = 0b01
     darkgray = 0b10
     lightgray = 0b11
-    breg = b'\x03\x01\x00\x02\xe6f+\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xff\xffn\x91\xc7\xffZ\x91\xcf\xff\x01'
+    breg = b'\x03\x01\x00\x02\xe6\xe6+\x01\x00\xff\xff\x00\x00\xff\xff\x00\x00\x00\x00\xf7\xff\xff\xffn\x91\xc7\xffZ\x91\xcf\xff\x01'
     def __init__(self, spi=None, *args, **kwargs):
         self.sqr_side = 300
         self.ic_side = 400
