@@ -975,11 +975,11 @@ def l_by_l(buf, w, h):
 #--------------------------------------------------------------
 @micropython.viper
 def pad_right(ba:ptr8, lenba:int, w:int, c:int):
-    pad = 8 - (w & 7)
-    bpad = ((lenba <<3) - pad) >>3
-    if pad == 8 and bpad == 0:
+    pad = -w&7 # same as (8 - (w & 7)) & 7
+    bpad = lenba -((w+pad)>>3)
+    if pad == 0 and bpad == 0:
         return
-    if pad != 8:
+    if pad != 0:
         mask = (1<<pad)-1
         ba[lenba-1-bpad] = (int(ba[lenba-1-bpad]) & ~(mask&0xff)) if c else int(ba[lenba-1-bpad]) | mask
     for i in range(bpad):
@@ -989,7 +989,8 @@ def pad_right(ba:ptr8, lenba:int, w:int, c:int):
 def shiftr(buf:ptr8, lenbuf:int, w:int, shift:int, c:int)->object:
     byte_sh = shift >> 3
     bit_sh = shift & 7 # Same as %8
-    new = 1 if (bit_sh + (w &7)) >= 8 else 0
+    # new byte only if the right shift pushes the used bits of the last buf byte past its boundary
+    new = 1 if (bit_sh + ((w & 7) or 8)) >= 8 else 0 #new = 1 if ((w + shift + 7) >> 3) > lenbuf else 0 # ((w + bit_sh + 7) >> 3) - ((w + 7) >> 3)#1 if (w+bit_sh +7) >>3 > lenbuf else 0#1 if (bit_sh + (w &7)) >= 8 else 0
     reslen = byte_sh + lenbuf + new
     res:object = bytearray(reslen)
     if not c:
@@ -1012,7 +1013,6 @@ def shiftr(buf:ptr8, lenbuf:int, w:int, shift:int, c:int)->object:
         else:
             res[byte_sh+i] = (shftd & cr_msk) | (carry & sh_msk) # wrote for c = 0, but seems to be the same for c = 1
         carry = (buf[i] << (8 - bit_sh)) & 0xff
-    #print(carry)
     if new:
         res[reslen-1] = carry
     if pdmsk:
