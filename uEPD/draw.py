@@ -788,16 +788,13 @@ class ChainBuff(Drawable): #mainly for writing fonts
             if int(dx) != 0:
                 cursor += int(self.spacing)
                 first: int = int(cursor) >> 3
-                if cursor%8:
-                    row:object = shiftr(lines, len(lines), width, cursor%8, self.cc)
-                    ba[first] = int(ba[first]) | int(row[0]) # This works for font_to_py fonts, but might not for other fonts
-                    for b in range(1, int(len(row))):
-                        ba[b+first] = int(row[b])
-                else:
-                    for b in range(int(len(lines))):
-                        ba[b+first] = int(lines[b])
+                bit_sh = cursor&7
+                row:object = shiftr(lines, len(lines), width, bit_sh, self.cc)
+                ba[first] = int(ba[first]) | int(row[0]) if self.cc else int(ba[first]) & int(row[0]) # This works for font_to_py fonts, but might not for other fonts
+                for b in range(1, int(len(row))):
+                    ba[b+first] = int(row[b])
             else:
-                row = shiftr(lines, len(lines), width, self.shift, self.cc) if self.shift else lines
+                row = shiftr(lines, len(lines), width, self.shift, self.cc)
                 for i , byt in enumerate(row):
                     ba[int(i)] = int(byt) & 0xff
             cursor += width if not self.fixed_w else int(self.fixed_w)
@@ -1014,9 +1011,9 @@ def shiftr(buf:ptr8, lenbuf:int, w:int, shift:int, c:int)->object:
             res[byte_sh+i] = (shftd & cr_msk) | (carry & sh_msk) # wrote for c = 0, but seems to be the same for c = 1
         carry = (buf[i] << (8 - bit_sh)) & 0xff
     if new:
-        res[reslen-1] = carry
+        res[reslen-1] = int(res[reslen-1]) & carry if c == 0 else carry
     if pdmsk:
-        res[reslen-1] = int(res[reslen-1]) | pdmsk if not c else int(res[reslen-1]) & ~pdmsk
+        res[reslen-1] = int(res[reslen-1]) | pdmsk if c == 0 else int(res[reslen-1]) & ~pdmsk
     return res
 
 @micropython.viper
