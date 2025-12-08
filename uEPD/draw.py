@@ -863,10 +863,10 @@ class Prerendered(Drawable):
     def draw(self):
         r = l_by_l(self.buff, self.w, self.h) if Drawable.hor else l_by_l(self.buff, self.h, self.w)
         for ln in r:
+            reverse_bits(ln, len(ln)) if self.rev else None
             res = self._shiftr(ln, len(ln), self.w,  self.shift, self.cc) if Drawable.hor and self.shift else shiftl(ln, len(ln), self.shift, self.cc) if self.shift and not Drawable.hor else bytearray(ln)
             pad_right(res, len(res), self.w, self.cc) if not self.shift and Drawable.hor else None
             invert_bytes(res, len(res)) if self.inv else None
-            reverse_bits(res, len(res)) if self.rev else None
             yield res
 
     @staticmethod
