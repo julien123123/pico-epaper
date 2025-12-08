@@ -699,10 +699,16 @@ class ChainBuff(Drawable): #mainly for writing fonts
         self.spacing = spacing
         self.fixed_w = fixed_w if fixed_w != 'max' else font.max_width()
         self.font = font
-        self.chr_l = []
-        self.w_l = array('H',[])
         self.invert = invert
         self.v_rev = v_rev # revert when vertical
+
+        self.chr_l = []
+        self.ch_w = array('H', [])
+        self.ch_bw = bytearray()  # max width = 2040 bits, byte width
+        self.ch_first_b = bytearray()  # first byte
+        self.ch_bit_sh = bytearray()  # bit shift
+        self.ch_cur = array('H', [])
+        self.ch_rmsk = bytearray()
 
         if self.fixed_w and self.fixed_w < self.font.max_width():
             raise ValueError(f"fixed_width should be equal to or greater than the font's max_width, use 'max' to use that value instead")
@@ -714,8 +720,8 @@ class ChainBuff(Drawable): #mainly for writing fonts
     def width(self):
         ttl = 0 if Drawable.hor  else self.font.height()
         if Drawable.hor :
-            nb = len(self.w_l)
-            ttl += sum(self.w_l) if not self.fixed_w else self.fixed_w*nb
+            nb = len(self.ch_w)
+            ttl += sum(self.ch_w) if not self.fixed_w else self.fixed_w * nb
             ttl += self.spacing * (nb-1)
         return ttl
 
@@ -723,8 +729,8 @@ class ChainBuff(Drawable): #mainly for writing fonts
     def height(self):
         ttl = 0 if not Drawable.hor  else self.font.height()
         if not Drawable.hor :
-            nb = int(len(self.w_l) / 2)
-            ttl += sum(self.w_l) if not self.fixed_w else self.fixed_w * nb
+            nb = int(len(self.ch_w) / 2)
+            ttl += sum(self.ch_w) if not self.fixed_w else self.fixed_w * nb
             ttl += self.spacing * (nb - 1)
         return ttl
 
@@ -740,36 +746,31 @@ class ChainBuff(Drawable): #mainly for writing fonts
 
     def setup(self):
         self.cc = (self.c & 1) ^ 1 if self.invert else self.cc
-        for ltr in self.st:
-            gl = self.font.get_ch(ltr)
-            self.chr_l.append(gl[0])
-            self.w_l.append(gl[2])
-
+        if Drawable.hor:
+            cursor = self.shift
+            for i, ltr in enumerate(self.st):
+                gl = self.font.get_ch(ltr)
+                self.chr_l.append(gl[0])
+                w = gl[2]
+                self.ch_w.append(w)
+                if i:
+                    cursor += self.spacing
+                self.ch_cur.append(cursor)
+                self.ch_bw.append( ( w + 7 ) >> 3 )
+                self.ch_first_b.append(cursor>>3)
+                self.ch_bit_sh.append(cursor&7)
+                self.ch_rmsk.append(bmsk('R', 8 - (cursor&7)))
+                cursor += w if not self.fixed_w else self.fixed_w
 
     def draw(self):
         if Drawable.hor :
-            ch_bw = bytearray() # max width = 2040 bits, byte width
-            ch_fitst_b = bytearray() # first byte
-            ch_bit_sh = bytearray() # bit shift
-            ch_cur = array('H', [])
-            ch_rmsk = bytearray()
-            cursor = self.shift
-            for i in range(len(self.chr_l)):
-                if i:
-                    cursor += self.spacing
-                ch_cur.append(cursor)
-                ch_bw.append((self.w_l[i]+7) >> 3)
-                ch_fitst_b.append(int(cursor) >> 3)
-                ch_bit_sh.append(cursor&7)
-                ch_rmsk.append(int(bmsk('R', 8-(cursor&7))))
-                cursor += self.w_l[i] if not self.fixed_w else self.fixed_w
             empy = bytes([0xff if not self.cc else 0]) * self.bwidth
             for ln in range(self.height):
                 fnl = bytearray(empy)
                 for i, f in enumerate(self.chr_l):
-                    wb = ch_bw[i]
+                    wb = self.ch_bw[i]
                     line = memoryview(f[ln*wb:ln*wb+wb])
-                    self.linec(fnl, line, wb, ch_fitst_b[i], ch_bit_sh[i], ch_rmsk[i])
+                    self.linec(fnl, line, wb, self.ch_first_b[i], self.ch_bit_sh[i], self.ch_rmsk[i])
                 invert_bytes(fnl, len(fnl)) if self.invert else None
                 reverse_bits(fnl, len(fnl)) if self.v_rev else None
                 yield fnl
@@ -779,7 +780,7 @@ class ChainBuff(Drawable): #mainly for writing fonts
 
             bkg = 0 if self.cc else 0xff
             for e, elem in enumerate(self.chr_l):
-                w = self.w_l[e]
+                w = self.ch_w[e]
                 delta = self.fixed_w - w if self.fixed_w else 0
                 for line in l_by_l(elem, self.font.height(), w):
                     line = bytearray(line)
@@ -794,29 +795,44 @@ class ChainBuff(Drawable): #mainly for writing fonts
                         yield bytearray([bkg]*self.bwidth)
 
     @micropython.viper
-    def linec(self, fnl:ptr8, line: ptr8, wb:int, first_b:int, bit_sh:int, rmsk:int):
-        if bit_sh:
-            if self.cc:
+    def linec(self, fnl: ptr8, line: ptr8, wb: int, first_b: int, bit_sh: int, rmsk: int):
+        cc: int = self.cc
+        adr: int = first_b
+        acc: int = 0
+        acc_bt: int = bit_sh
+
+        total_bits: int = wb * 8
+        pd_bits: int = (8 - ((bit_sh + total_bits) & 7)) & 7
+        pdmsk: int = bmsk('R', pd_bits) if pd_bits else 0
+        if bit_sh == 0:
+            mask: int = pdmsk if not cc else 0xFF
+            if cc:
                 for n in range(wb):
-                    bt:int = line[n]
-                    fnl[first_b + n] |= (bt >> bit_sh)
-                    fnl[first_b + n + 1] |= bt << (8-bit_sh)
+                    fnl[adr + n] = fnl[adr + n] | line[n]
             else:
                 for n in range(wb):
-                    bt:int = line[n]
-                    fnl[first_b + n] &= (bt >> bit_sh) | (~rmsk & 0xff)
-                    fnl[first_b + n + 1] &= (bt << (8 - bit_sh)) | rmsk
-        else:
-            if self.cc:
-                for n in range(wb):
-                    fnl[first_b + n] |= line[n]
-            else:
-                for n in range(wb):
-                    fnl[first_b + n] &= line[n]
+                    fnl[adr + n] =fnl[adr + n] & (line[n] | mask)
+            return
+
+        for n in range(wb + 1):
+            bt: int = line[n] if n < wb else 0
+            acc = ((acc << 8) | bt) & 0xFFFF
+            acc_bt += 8
+
+            while acc_bt >= 8:
+                outb: int = (acc >> (acc_bt - 8)) & 0xFF
+                mask: int = 0
+                if not cc:
+                    first_byte_mask: int = ~rmsk & 0xFF if (adr == first_b) else 0
+                    last_byte_mask: int = pdmsk if (adr == first_b + ((bit_sh + wb * 8 - 1) >> 3)) else 0
+                    mask = first_byte_mask | last_byte_mask
+                fnl[adr] = (fnl[adr] | outb) if cc else (fnl[adr] & (outb | mask))
+                adr += 1
+                acc_bt -= 8
 
     def reset_draw(self):
         self.chr_l = []
-        self.w_l = array('H', [])
+        self.ch_w = array('H', [])
         self.cc = self.c & 1
         super().reset_draw()
 
@@ -855,44 +871,54 @@ class Prerendered(Drawable):
 
     @staticmethod
     @micropython.viper
-    def _shiftr(buf: ptr8, lenbuf: int, w: int, shift: int, c: int) -> object:
-        byte_sh = shift >> 3
-        bit_sh = shift & 7  # Same as %8
-        # new byte only if the right shift pushes the used bits of the last buf byte past its boundary
-        new = 1 if (bit_sh + ((w & 7) or 8)) > 8 else 0
-        reslen = byte_sh + lenbuf + new
-        res = bytearray(reslen)
-        if not c:
-            for i in range(reslen):
-                res[i] = 0xff  # if color is 0 bacground is a 1s
-        pdmsk = int(bmsk('R', 8 - ((bit_sh + w) & 7)))
-        if not bit_sh:
-            for b in range(lenbuf):
-                res[b + byte_sh] = int(res[b + byte_sh]) | int(buf[b]) if c else int(res[b + byte_sh]) & int(buf[b])
-            res[reslen - 1] = int(res[byte_sh + lenbuf - 1]) | pdmsk if not c else int(
-                res[byte_sh + lenbuf - 1]) & ~pdmsk
+    def _shiftr(gl: ptr8, gllen: int, w: int, sh: int, c: int) -> object:
+        byte_sh: int = sh >> 3
+        btsh: int = sh & 7
+        lst: int = w & 7
+        lst = 8 if lst == 0 else lst
+        new: int = 1 if (btsh + lst) > 8 else 0
+        outlen: int = byte_sh + gllen + new
+        res = bytearray(outlen)
+        if c == 0:
+            for i in range(outlen):
+                res[i] = 0xFF
+
+        pd_bits: int = 8 - ((btsh + w) & 7)
+        pdmsk: int = int(bmsk('R', pd_bits & 7))
+        if btsh == 0:
+            if c:
+                for i in range(gllen):
+                    res[byte_sh + i] = int(res[byte_sh + i]) | int(gl[i])
+            else:
+                for i in range(gllen):
+                    res[byte_sh + i] = int(res[byte_sh + i]) & int(gl[i])
+            last = byte_sh + gllen - 1
+            if pdmsk:
+                res[last + new] = int(res[last + new]) & ~pdmsk if c else int(res[last + new]) | pdmsk
             return res
-        limit = reslen - 1 - byte_sh
-        r = int(bmsk('R', 8 - bit_sh))
-        l = int(bmsk('L', 8 - bit_sh))
-        if c:
-            for i in range(lenbuf):
-                bt = buf[i]
-                addr:int = byte_sh +i
-                res[addr] = int(res[addr]) | (bt >> bit_sh)
-                if i < limit:
-                    res[addr + 1] = int(res[addr+ 1]) | (bt << (8 - bit_sh))
-            if pdmsk:
-                res[reslen - 1] = int(res[reslen - 1]) & ~pdmsk
-        else:
-            for i in range(lenbuf):
-                bt = buf[i]
-                addr:int = byte_sh + i
-                res[addr] = int(res[addr]) & ((bt >> bit_sh) | l)
-                if i < limit:
-                    res[addr+1] = int(res[byte_sh + i + 1]) & ((bt << (8 - bit_sh)) | r)
-            if pdmsk:
-                res[reslen-1] = int(res[reslen - 1]) | pdmsk
+
+        acc: int = 0
+        acc_bt: int = btsh
+        adr: int = byte_sh
+
+        for i in range(gllen):
+            acc = ((acc << 8) | int(gl[i])) & 0xFFFF
+            acc_bt += 8
+            while acc_bt >= 8:
+                outb = (acc >> (acc_bt - 8)) & 0xFF
+                res[adr] = int(res[adr]) | outb if c else int(res[adr]) & outb
+                adr += 1
+                acc_bt -= 8
+
+        if acc_bt:
+            outb: int = (acc << (8 - acc_bt)) & 0xFF
+            if adr < outlen:
+                res[adr] = int(res[adr]) | outb if c else int(res[adr]) & outb
+                adr += 1
+        if pdmsk:
+            res[outlen - 1] = int(res[outlen - 1]) & ~pdmsk if c else int(res[outlen - 1]) | pdmsk
+        if not c:
+            res[0] = int(res[0]) | int(bmsk('L', 8-btsh))
         return res
 
 class Filler(Drawable):
@@ -1131,7 +1157,7 @@ if __name__ is '__main__':
     #sm.ram_flag = 1
     #br = ABLine(0,0, 30, 10, 0)
     #br.ram_flag = 1
-    txt = ChainBuff("OCto", smol, 9,0,0, invert = True)
+    txt = ChainBuff("o", smol, 9,0,0, invert = True)
     txt.ram_flag = 1
     #t= ChainBuff("33", big, 6, 7, False, False, invert = True, color=0)
     #t.ram_flag = 1
