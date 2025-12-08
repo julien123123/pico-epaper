@@ -124,7 +124,7 @@ class DirectMode:
         del d
         return x, y, heigh, width
 
-    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True, v_rev = True):
+    def text(self, text, font, x, y, c=None, spacing = False, fixed_width = False, diff = False, invert = True, v_rev = False):
         #x y are always at the top left of the text line
         c = self.Eink.black if not c else c
         d = draw.ChainBuff(text, font, x, y, spacing = spacing, fixed_w = fixed_width, color = c, invert = invert, v_rev=v_rev)

@@ -238,7 +238,7 @@ class Pixel(Drawable):
     def __init__(self, x, y, color):
         super().__init__(x, y, color)
         self.byte = 0
-        self.setufp()
+        self.setup()
         self._parse()
 
     @property
@@ -749,16 +749,28 @@ class ChainBuff(Drawable): #mainly for writing fonts
 
     def draw(self):
         if Drawable.hor :
+            ch_bw = bytearray() # max width = 2040 bits, byte width
+            ch_fitst_b = bytearray() # first byte
+            ch_bit_sh = bytearray() # bit shift
+            ch_cur = array('H', [])
+            cursor = self.shift
+            for i in range(len(self.chr_l)):
+                if i:
+                    cursor += self.spacing
+                ch_cur.append(cursor)
+                ch_bw.append((self.w_l[i]+7) >> 3)
+                ch_fitst_b.append(int(cursor) >> 3)
+                ch_bit_sh.append(cursor&7)
+                cursor += self.w_l[i] if not self.fixed_w else self.fixed_w
             for ln in range(self.height):
-                args = []
-                ba = bytearray([0xff if not self.cc else 0]*self.bwidth)
+                fnl = bytearray([0xff if not self.cc else 0]*self.bwidth)
                 for i, f in enumerate(self.chr_l):
-                    w = (self.w_l[i]+7) >> 3
-                    line = memoryview(f[ln*w:ln*w+w])
-                    args.append(line)
-                self.linec(args, ba)
-                invert_bytes(ba, len(ba)) if self.invert else None
-                yield ba
+                    wb = ch_bw[i]
+                    line = memoryview(f[ln*wb:ln*wb+wb])
+                    self.linec(fnl, line, wb, ch_fitst_b[i], ch_bit_sh[i], self.w_l[i])
+                invert_bytes(fnl, len(fnl)) if self.invert else None
+                reverse_bits(fnl, len(fnl)) if self.v_rev else None
+                yield fnl
         else: # Vertical
             # Seems that since the char buffers are a memoryview, if the letters are not shifted, the only need to be
             # reverted and reversed once. If the same letter comes up again, it will be reverted and reversed again
@@ -780,25 +792,18 @@ class ChainBuff(Drawable): #mainly for writing fonts
                         yield bytearray([bkg]*self.bwidth)
 
     @micropython.viper
-    def linec(self,linesw:object, ba:ptr8)->object:
-        ptr8(self.w_l)
-        cursor:int = int(self.shift)
-        for dx, lines in enumerate(linesw):
-            width:int = int(self.w_l[int(dx)])
-            if int(dx) != 0:
-                cursor += int(self.spacing)
-                first: int = int(cursor) >> 3
-                bit_sh = cursor&7
-                row:object = shiftr(lines, len(lines), width, bit_sh, self.cc)
-                ba[first] = int(ba[first]) | int(row[0]) if self.cc else int(ba[first]) & int(row[0]) # This works for font_to_py fonts, but might not for other fonts
-                for b in range(1, int(len(row))):
-                    ba[b+first] = int(row[b])
-            else:
-                row = shiftr(lines, len(lines), width, self.shift, self.cc)
-                for i , byt in enumerate(row):
-                    ba[int(i)] = int(byt) & 0xff
-            cursor += width if not self.fixed_w else int(self.fixed_w)
-
+    def linec(self, fnl:ptr8, line: ptr8, wb:int, first_b:int, bit_sh:int, w:int):
+        r = int(bmsk('R', 8-bit_sh))
+        l = int(bmsk('L', 8-bit_sh))
+        if bit_sh:
+            for n in range(wb):
+                bt = line[n]
+                fnl[first_b + n] = int(fnl[first_b + n]) | (bt >> bit_sh) if self.cc else int(fnl[first_b + n]) & ((bt >> bit_sh)|l)
+                bt = bt << (8-bit_sh)
+                fnl[first_b + n + 1] = int(fnl[first_b + int(n) + 1]) | bt if self.cc else int(fnl[first_b + int(n) + 1]) & (bt | r)
+        else:
+            for n in range(wb):
+                fnl[first_b+n] = int(fnl[first_b+n]) |  line[n] if self.cc else int(fnl[first_b+n]) & line[n]
 
     def reset_draw(self):
         self.chr_l = []
@@ -833,10 +838,11 @@ class Prerendered(Drawable):
     def draw(self):
         r = l_by_l(self.buff, self.w, self.h) if Drawable.hor else l_by_l(self.buff, self.h, self.w)
         for ln in r:
-            invert_bytes(ln, len(ln)) if self.inv else None
-            reverse_bits(ln, len(ln)) if self.rev else None
-            pad_right(ln, len(ln), self.w, self.cc) if not self.shift and Drawable.hor else None
-            yield shiftr(ln, len(ln), self.w,  self.shift, self.cc) if self.shift and Drawable.hor else shiftl(ln, len(ln), self.shift, self.cc) if self.shift and not Drawable.hor else ln
+            res = shiftr(ln, len(ln), self.w,  self.shift, self.cc) if Drawable.hor and self.shift else shiftl(ln, len(ln), self.shift, self.cc) if self.shift and not Drawable.hor else bytearray(ln)
+            pad_right(res, len(res), self.w, self.cc) if not self.shift and Drawable.hor else None
+            invert_bytes(res, len(res)) if self.inv else None
+            reverse_bits(res, len(res)) if self.rev else None
+            yield res
 
 class Filler(Drawable):
     def __init__(self, x = None, y = None, w = None, h = None, color = 1, key = -1, invert = False):
@@ -987,33 +993,27 @@ def shiftr(buf:ptr8, lenbuf:int, w:int, shift:int, c:int)->object:
     byte_sh = shift >> 3
     bit_sh = shift & 7 # Same as %8
     # new byte only if the right shift pushes the used bits of the last buf byte past its boundary
-    new = 1 if (bit_sh + ((w & 7) or 8)) >= 8 else 0 #new = 1 if ((w + shift + 7) >> 3) > lenbuf else 0 # ((w + bit_sh + 7) >> 3) - ((w + 7) >> 3)#1 if (w+bit_sh +7) >>3 > lenbuf else 0#1 if (bit_sh + (w &7)) >= 8 else 0
+    new = 1 if (bit_sh + ((w & 7) or 8)) > 8 else 0
     reslen = byte_sh + lenbuf + new
-    res:object = bytearray(reslen)
+    res = bytearray(reslen)
     if not c:
         for i in range(reslen):
             res[i] = 0xff # if color is 0 bacground is a 1s
-    right_padding = 8 - ((bit_sh + w ) & 7)
-    pdmsk = (1<<right_padding) - 1
+    pdmsk = int(bmsk('R', 8 - ((bit_sh + w ) & 7)))
     if not bit_sh:
         for b in range(lenbuf):
-            res[b+byte_sh] = int(buf[b])
+            res[b+byte_sh] = int(res[b+byte_sh]) | int(buf[b]) if c else int(res[b+byte_sh] ) & int(buf[b])
         res[reslen-1] = int(res[byte_sh+lenbuf-1]) | pdmsk if not c else int(res[byte_sh+lenbuf-1]) & ~pdmsk
         return res
-    carry = 0
-    cr_msk = (1 << (8-bit_sh)) -1
-    sh_msk = 0xFF ^ cr_msk # (( 1 << bit_sh) - 1) << (8 - bit_sh)
+    r = int(bmsk('R', 8-bit_sh))
+    l = int(bmsk('L', 8-bit_sh))
     for i in range(lenbuf):
-        shftd = (buf[i] >> bit_sh) & 0xff
-        if i == 0:
-            res[byte_sh+i] = shftd | sh_msk if not c else shftd #should not need to apply mask since shifting creates 0s on the left
-        else:
-            res[byte_sh+i] = (shftd & cr_msk) | (carry & sh_msk) # wrote for c = 0, but seems to be the same for c = 1
-        carry = (buf[i] << (8 - bit_sh)) & 0xff
-    if new:
-        res[reslen-1] = int(res[reslen-1]) & carry if c == 0 else carry
+        bt = buf[i]
+        res[byte_sh + i] = int(res[byte_sh+i]) | (bt >> bit_sh) if c else int(res[byte_sh+i]) & ((bt >> bit_sh)|l)
+        if byte_sh+i+1 <= (reslen-1):
+            res[byte_sh + i + 1] = int(res[byte_sh + i + 1]) | (bt << (8-bit_sh)) if c else int(res[byte_sh + i + 1]) & ((bt << (8-bit_sh))|r)
     if pdmsk:
-        res[reslen-1] = int(res[reslen-1]) | pdmsk if c == 0 else int(res[reslen-1]) & ~pdmsk
+        res[reslen-1] = int(res[reslen-1]) & ~pdmsk if c else int(res[reslen-1]) | pdmsk
     return res
 
 @micropython.viper
@@ -1047,6 +1047,17 @@ def reverse_bits(ba: ptr8, lenba:int) -> ptr8:
 def invert_bytes(ba:ptr8, lenba:int)->ptr8:
     for i in range(lenba):
         ba[i] = 255 - ba[i]  # equivalent to NOT operation because did not work on Esp32
+
+@micropython.viper
+def bmsk(side:ptr8, n_bts:int)->int:
+    rmsk = b'\x00\x01\x03\x07\x0f\x1f?\x7f'
+    lmsk = b'\x00\xfe\xfc\xf8\xf0\xe0\xc0\x80'
+    if int(side[0]) == 82:
+        return int(rmsk[int(n_bts)&7])
+    elif int(side[0]) == 76:
+        return int(lmsk[int(n_bts)&7])
+    else:
+        raise ValueError("Side must be 'R' or 'L' ")
 
 def grid_print(row: list):
     """ For testing purposes """
@@ -1087,24 +1098,24 @@ if __name__ is '__main__':
     smol = freesans20 if Drawable.hor else freesans20V
     big = numr110H if Drawable.hor else numr110V
 
-    plg = Poly([(20,10),(60,4),(50,50), (3,30)], 0, False)
-    plg.ram_flag = 1
+    #plg = Poly([(20,10),(60,4),(50,50), (3,30)], 0, False)
+    #plg.ram_flag = 1
     #sm = Prerendered(9,10,20,20, smile, 1, invert = True, reverse = True)
     #sm.ram_flag = 1
     #br = ABLine(0,0, 30, 10, 0)
     #br.ram_flag = 1
-    txt = ChainBuff("OCtoBRE1", smol, 9,0, False, False, 0, invert = True, v_rev=True)
+    txt = ChainBuff("OCto", smol, 9,0,0, invert = True)
     txt.ram_flag = 1
     #t= ChainBuff("33", big, 6, 7, False, False, invert = True, color=0)
     #t.ram_flag = 1
     #p = Pixel(90, 5, 0)
     #p.ram_flag = 1
-    lll = Ellipse(100, 120, 40,20, 0,True, 0b1011)
+    #lll = Ellipse(100, 120, 40,20, 0,True, 0b1011)
     #print(lll.setup2())
-    lll.ram_flag = 1
+    #lll.ram_flag = 1
 
-    f = Filler(color=9, key=1)
-    f.ram_flag =1
+    #f = Filler(color=9, key=1)
+    #f.ram_flag =1
     #ln = Rect(19, 10, 10, 20, 0, False)
     #ln.ram_flag = 1
     #lin= StrLine(10, 60,20, 0, 'h')
@@ -1126,7 +1137,7 @@ if __name__ is '__main__':
     #Drawable.reset()
     ba = bytearray(200//8*200)
     r = genr(ba)
-    for l in l_by_l(ba[:r], 32*8, 200):
+    for l in l_by_l(ba[:r], 30*8, 60):
         grid_print(l)
     #for i in d:
         #grid_print(i) if Drawable.hor else grid_print(i)
