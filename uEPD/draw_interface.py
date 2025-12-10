@@ -18,51 +18,66 @@ class DirectMode:
         self.hor = hor
         draw.Drawable.hor = self.hor
 
+    @micropython.viper
     def _set_frame(self):
         """Note: The -1 are to account for the 1 pixel having address 0 (instead of 1 like when we count pixels)"""
-        seq = self.Eink.cur_seq & 0b11
-        xspan = draw.Drawable.xspan
-        yspan = draw.Drawable.yspan
+        width_in_bytes = bool(self.Eink._width_in_bytes)
+        seq = int(self.Eink.cur_seq) & 0b11
+        xspan = ptr16(draw.Drawable.xspan)
+        yspan = ptr16(draw.Drawable.yspan)
 
         # xspan is already in bytes, no need for *8 multiplication
-        minx = xspan[0]
-        maxx = xspan[1]
+        minx = int(xspan[0])
+        maxx = int(xspan[1])
+        sqr_side = int(self.Eink.sqr_side) - 1
+        ic_side = int(self.Eink.ic_side) - 1
 
         if seq == 0:  # bottom right (180)
-            minx, maxx = self.Eink._virtual_width(self.Eink.ic_side - 1 - minx * 8), self.Eink._virtual_width(self.Eink.ic_side - 1 - maxx * 8)
-            miny, maxy = self.Eink.sqr_side - 1 - yspan[0], self.Eink.sqr_side - 1 - yspan[1]
+            minx, maxx = ic_side - ( minx << 3 ), ic_side - (maxx << 3)
+            miny, maxy = sqr_side - yspan[0], sqr_side - yspan[1]
         elif seq == 1:  # bottom left (270)
-            minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
-            miny, maxy = self.Eink.sqr_side - 1 - yspan[0], self.Eink.sqr_side - 1 - yspan[1]
+            minx, maxx = minx << 3, maxx << 3
+            miny, maxy = sqr_side - yspan[0], sqr_side - yspan[1]
         elif seq == 2:  # top right (90)
-            minx, maxx = self.Eink._virtual_width(self.Eink.ic_side - 1 - minx * 8), self.Eink._virtual_width(self.Eink.ic_side - 1 - maxx * 8)
+            minx, maxx = ic_side - (minx << 3), ic_side - (minx << 3)
             miny, maxy = yspan[0], yspan[1]
         else:  # 3 top left (0)
-            minx, maxx = self.Eink._virtual_width(minx * 8), self.Eink._virtual_width(maxx * 8)
+            minx, maxx = minx << 3, maxx << 3
             miny, maxy = yspan[0], yspan[1]
-
+        if width_in_bytes:
+            minx, maxx = minx >> 3, maxx >> 3
         self.Eink._set_window(minx, maxx, miny, maxy)
         self.Eink._set_cursor(minx, miny)
 
     def _color_sort(self, key):
-        self.Eink._send_command(0x24)
+        E = self.Eink
+        D = draw.Drawable
+        E._send_command(0x24)
         if self.mode == BW2X:
-            buf = bytearray()
-            for chunk in draw.Drawable.draw_all(key, black_ram=True):
+            buf = bytearray() if not E.use_ba else memoryview(E.buf)
+            for chunk in D.draw_all(key, black_ram=True):
                 buf.extend(chunk)
-            self.Eink._send_data(buf)
-            self.Eink._send_command(0x26)
-            self.Eink._send_data(buf)
+            E._send_data(buf)
+            E._send_command(0x26)
+            E._send_data(buf)
         else:
             if self.ram_fl & 0b01:
-                for ba in draw.Drawable.draw_all(key, black_ram=True):
-                    self.Eink._send_data(ba)
+                if E.use_ba:
+                    stop = D.draw_all_into(E.buf, len(E.buf), key, False, True)
+                    E._send_data(E.mv[0:stop])
+                else:
+                    for ba in D.draw_all(key, black_ram=True):
+                        E._send_data(ba)
             if self.ram_fl & 0b10:
-                draw.Drawable.second_color() if self.mode is G2B else None
-                draw.Drawable.reset() if self.ram_fl & 0b01 else None
-                self.Eink._send_command(0x26)
-                for ba in draw.Drawable.draw_all(key, red_ram=True):
-                    self.Eink._send_data(ba)
+                D.second_color() if self.mode is G2B else None
+                D.reset() if self.ram_fl & 0b01 else None
+                E._send_command(0x26)
+                if E.use_ba:
+                    stop = D.draw_all_into(E.buf, len(E.buf), key, True, False)
+                    E._send_data(E.mv[0:stop])
+                else:
+                    for ba in D.draw_all(key, red_ram=True):
+                        E._send_data(ba)
 
     def _ram_logic(self, obj, diff):
         if self.mode in (BW1B, BW2X) or (self.mode in (G2B, BW2B) and not diff):

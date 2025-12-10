@@ -1,7 +1,7 @@
 import micropython
 import utime
-from struct import pack, unpack
 from array import array
+_empty = 0xffff
 
 def timed_function(f, *args, **kwargs):
     print(f)
@@ -20,10 +20,10 @@ class Drawable:
     whtl = []
     fll = []
     main_row_pointer = 0
-    xspan = [None, None]
-    yspan = [None, None]
-    background = [0xff, 0xff]
-    set = False
+    xspan = array('H', [_empty, _empty])
+    yspan = array('H', [_empty, _empty])
+    background = bytearray(b'\xff\xff')
+    #set = False
 
     @classmethod
     def c_width(cls):
@@ -35,7 +35,6 @@ class Drawable:
 
     @classmethod
     def draw_all(cls,  k: int = -1, red_ram: bool = False, black_ram: bool = False)-> object:
-        key_m = (cls.k_none, cls.k_0, cls.k_1)
         if red_ram and black_ram:
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
@@ -52,94 +51,70 @@ class Drawable:
                 if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
                     first_x = max(0, obj.actual_x // 8 - cls.xspan[0])
                     nxt = next(obj._gen)
-                    key_m[k + 1](row, row_w, nxt, len(nxt), first_x)
+                    cls.stitch(k, row, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer += 1
             cls.main_row_pointer += 1
             yield row
 
     @micropython.viper
     @staticmethod
-    def k_none(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        for ind in range(lenob):
-            if int(first_x + ind) >= lenro:
-                break
-            row[first_x + ind] = objline[ind]
-
-    @micropython.viper
-    @staticmethod
-    def k_0(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        for ind in range(lenob):
-            if int(first_x + ind) >= lenro:
-                break
-            row[first_x + ind] = int(row[first_x + ind]) & objline[ind]
-
-    @micropython.viper
-    @staticmethod
-    def k_1(row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        for ind in range(lenob):
-            if int(first_x + ind) >= lenro:
-                break
-            row[first_x + ind] = row[first_x + ind] | objline[ind]
+    def stitch(key:int, row: ptr8, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
+        rdx = ptr8(uint(row)+first_x)
+        obdx = ptr8(uint(objline))
+        rstop = ptr8(uint(rdx)+lenob) if lenob < lenro - first_x else ptr8(uint(row)+lenro)
+        if key == -1:
+            while int(rdx) < int(rstop):
+                rdx[0] = obdx[0]
+                rdx = ptr8(uint(rdx) + 1)
+                obdx = ptr8(uint(obdx) + 1)
+        elif key ==0:
+            while int(rdx) < int(rstop):
+                rdx[0] = int(rdx[0]) & int(obdx[0])
+                rdx = ptr8(uint(rdx) + 1)
+                obdx = ptr8(uint(obdx) + 1)
+        else:
+            while int(rdx) < int(rstop):
+                rdx[0] = int(rdx[0]) | int(obdx[0])
+                rdx = ptr8(uint(rdx) + 1)
+                obdx = ptr8(uint(obdx) + 1)
 
     @micropython.viper
     @classmethod
     def draw_all_into(cls, buf:ptr8, lenbuf:int, k:int, red_ram:bool, black_ram:bool) -> int:
         """Draw into an object with buffer protocl. Can be re-run until epmty"""
-        key_m = (cls.ik_none, cls.ik_0, cls.ik_1)
         if int(red_ram) and int(black_ram):
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
-        if not cls.set:
-            for fil in cls.fll:
-                fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
-            cls.main_row_pointer = cls.yspan[0]
+        for fil in cls.fll:
+            fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
+        cls.main_row_pointer = cls.yspan[0]
         print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = int(cls.c_width()) + 1
-        total_height = int(cls.c_height())
         bufh = lenbuf // row_w
-        max_buf_h = min(int(bufh), total_height-int(cls.main_row_pointer))
+        rows_left = int(cls.c_height()) - (int(cls.main_row_pointer) - int(cls.yspan[0]))
+        max_buf_h = min(int(bufh), rows_left)
         xspan0 = int(cls.xspan[0])
         cls.set = True
 
-        for line in range(int(max_buf_h)):
-            lnst = line*row_w
-            for b in range(row_w):
-                buf[lnst+b] = int(cls.background[0 if black_ram else 1])
+        bg = int(cls.background[0 if black_ram else 1])
+        ln_ptr = buf
+        last_b = int(max_buf_h)*row_w
+        stop = ptr8(int(ln_ptr)+last_b)
+        while int(ln_ptr) < int(stop):
+            fllptr = ln_ptr
+            fllstp = ptr8(int(fllptr)+row_w)
+            while int(fllptr) < int(fllstp):
+                fllptr[0] =  bg
+                fllptr = ptr8(int(fllptr)+1)
             for obj in cls.blkl + cls.whtl + cls.fll:
                 if (int(obj.ram_flag) & ram_chk) and int(obj.actual_y) + int(obj.row_pointer) == int(cls.main_row_pointer) and int(obj.row_pointer) < int(obj.height):
-                    first_x = max(0, int(obj.actual_x) // 8 - xspan0)
+                    first_x = int(max(0, int(obj.actual_x) // 8 - xspan0))
                     nxt = next(obj._gen)
-                    key_m[k + 1](buf, lnst, row_w, nxt, len(nxt), first_x)
+                    cls.stitch(k, ln_ptr, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer = int(obj.row_pointer) + 1
             cls.main_row_pointer = int(cls.main_row_pointer) + 1
-        return row_w*int(max_buf_h)
-
-    @micropython.viper
-    @staticmethod
-    def ik_none(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        objst = rost+first_x
-        for ind in range(lenob):
-            if int(ind) >= lenro:
-                break
-            buf[objst + ind] = objline[ind]
-
-    @micropython.viper
-    @staticmethod
-    def ik_0(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        objst = rost + first_x
-        for ind in range(lenob):
-            if int(ind) >= lenro:
-                break
-            buf[objst + ind] = int(buf[objst + ind]) & objline[ind]
-
-    @micropython.viper
-    @staticmethod
-    def ik_1(buf: ptr8, rost:int, lenro:int, objline: ptr8, lenob:int, first_x: int) -> ptr8:
-        objst = rost + first_x
-        for ind in range(lenob):
-            if int(ind) >= lenro:
-                break
-            buf[objst + ind] = buf[objst + ind] | objline[ind]
+            ln_ptr = ptr8(int(ln_ptr) + row_w)
+        return last_b
 
     @classmethod
     def flush(cls):
@@ -147,10 +122,10 @@ class Drawable:
         cls.whtl = []
         cls.fll = []
         cls.main_row_pointer = 0
-        cls.xspan = [None, None]
-        cls.yspan = [None, None]
-        cls.background = [0xff, 0xff]
-        cls.set = False
+        cls.xspan = array('H', [_empty, _empty])
+        cls.yspan = array('H', [_empty, _empty])
+        cls.background = bytearray(b'\xff\xff')
+        #cls.set = False
 
     @classmethod
     def reset(cls):
@@ -169,17 +144,24 @@ class Drawable:
         for obj in cls.whtl:
             obj.cc = obj.c >> 1 & 1
 
+    @micropython.viper
     @classmethod
-    def set_span(cls, screen_w, screen_h, full):
+    def set_span(cls, screen_w:int, screen_h:int, full:bool):
+        sbw:int = (screen_w >> 3)-1
+        sbh:int = screen_h -1
         if full:
-            cls.xspan = [0, screen_w//8-1]
-            cls.yspan = [0, screen_h-1]
+            cls.xspan[0], cls.yspan[0] = 0, 0
+            cls.xspan[1] = sbw
+            cls.yspan[1] = sbh
+
         else:
+            x = int(int(cls.xspan[1])%0xffff)
+            y = int(int(cls.yspan[1])%0xffff)
             # making sure the span is within the screen
-            cls.xspan[0] = max(cls.xspan[0], 0)
-            cls.xspan[1] = min(cls.xspan[1], screen_w // 8-1)
-            cls.yspan[0] = max(cls.yspan[0], 0)
-            cls.yspan[1] = min(cls.yspan[1], screen_h-1)
+            cls.xspan[0] = int(cls.xspan[0])%0xffff or 0 #if cls.xspan[0] else 0
+            cls.xspan[1] = x if x <= sbw else sbw
+            cls.yspan[0] = int(cls.yspan[0])%0xffff or 0#if cls.yspan[0] else 0
+            cls.yspan[1] = y if y <= sbh else sbh #min(cls.yspan[1], screen_h-1)
 
     # BASIC DRAWABLE CLASS TO BE INHERITED BY ALL OTHER CLASSES
 
@@ -226,13 +208,13 @@ class Drawable:
         else:
             Drawable.blkl.append(self)
 
-        if Drawable.xspan[0] is None or self.actual_x // 8 < Drawable.xspan[0]:
+        if Drawable.xspan[0] == _empty or self.actual_x // 8 < Drawable.xspan[0]:
             Drawable.xspan[0] = self.actual_x // 8
-        if Drawable.xspan[1] is None or (self.actual_x + self.shift + self.width + 7) // 8 > Drawable.xspan[1]:
+        if Drawable.xspan[1] == _empty or (self.actual_x + self.shift + self.width + 7) // 8 > Drawable.xspan[1]:
             Drawable.xspan[1] = (self.actual_x + self.shift + self.width + 7) // 8
-        if Drawable.yspan[0] is None or self.actual_y < Drawable.yspan[0]:
+        if Drawable.yspan[0] == _empty or self.actual_y < Drawable.yspan[0]:
             Drawable.yspan[0] = self.actual_y
-        if Drawable.yspan[1] is None or self.actual_y + self.height > Drawable.yspan[1]:
+        if Drawable.yspan[1] == _empty or self.actual_y + self.height > Drawable.yspan[1]:
             Drawable.yspan[1] = self.actual_y + self.height
 
 class Pixel(Drawable):

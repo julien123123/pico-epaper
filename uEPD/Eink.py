@@ -17,7 +17,7 @@ class EinkBase:
     x_set = 0  # format to send x width to the display
     modes = (norm, quick, part, gray4)
 
-    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, hold = False, init=True):
+    def __init__(self, rotation=0, cs_pin=None, dc_pin=None, reset_pin=None, busy_pin=None, hold = False, init=True, use_ba=False):
         if rotation in (0,180):
             self.width = self.ic_side
             self.height = self.sqr_side
@@ -38,7 +38,10 @@ class EinkBase:
         self.cur_seq = self.breg[0:4][int(rotation/90)]
         self.cur_md = EinkBase.modes[0] # start in normal mode
         self.draw = dms.DirectMode(self, 0, not self._sqr)
-
+        self.use_ba = use_ba
+        if use_ba:
+            self.buf = bytearray((self.ic_side>>3) * self.sqr_side)
+            self.mv = memoryview(self.buf)
         self._rst = reset_pin
         self._dc = dc_pin
         self._cs = cs_pin
@@ -156,31 +159,9 @@ class EinkBase:
 
         self._sort_ram()
 
-    def _abs_xy(self, rel_x, rel_y):
-        """:returns absolute display coordinates"""
-        x, y = (rel_y, rel_x) if (self.cur_seq >> 2) & 1 else (rel_x, rel_y)
-        seq = self.cur_seq & 0b11
-        abs_x, abs_y = 0,0
-        if not seq:
-            abs_x = self.ic_side - 1 - x
-            abs_y = self.sqr_side - 1 - y
-        elif seq == 1:
-            abs_x = x
-            abs_y = self.sqr_side - 1  - y
-        elif seq == 2:
-            abs_x = self.ic_side - 1 - x
-            abs_y = y
-        else: #seq == 3
-            abs_x = x
-            abs_y = y
-        return abs_x, abs_y
-
-    def _virtual_width(self, num = None):
-        """ Returning width whether the epd want it in bytes or absolute numbers"""
-        if self.breg[31]:
-            return num // 8 if num is not None else self.width //8
-        else:
-            return num if num is not None else self.width
+    @property
+    def _width_in_bytes(self):
+        return bool(self.breg[31])
 
     # --------------------------------------------------------
     # Dummy Methods that get overridden by child classes
@@ -254,7 +235,7 @@ class Eink(EinkBase):
         self._cs(0)
         if isinstance(data, int):
             self._spi.write(bytes([data]))
-        elif isinstance(data, (bytes, bytearray)):
+        elif isinstance(data, (bytes, bytearray, memoryview)):
             self._spi.write(data)
         else:
             raise ValueError  # For now
