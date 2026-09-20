@@ -161,20 +161,22 @@ class DirectMode:
         self._ram_logic(d, diff)
 
     def show(self,full = False, flush = True, key = -1):
-        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
+        E = self.Eink
+        draw.Drawable.set_span(E.ic_side, E.sqr_side, full)
         self._set_frame()
         self._color_sort(key)
-        self.Eink._updt_ctrl_2()
-        self.Eink._send_command(0x20)
-        self.Eink._read_busy()
+        E._updt_ctrl_2()
+        E._send_command(0x20)
+        E._read_busy()
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else Drawable.reset()
 
     def export(self, full = False, flush = True, key = -1, bw = True, red = False):
         """Returns the results of Drawable.draw_all in a buffer"""
-        draw.Drawable.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
-        buf_bw = (bytearray(b''.join(draw.Drawable.draw_all(key, black_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if bw else False
-        buf_red = (bytearray(b''.join(draw.Drawable.draw_all(key, red_ram=True))), draw.Drawable.c_width(), draw.Drawable.c_height()) if red else False
+        D = draw.Drawable
+        D.set_span(self.Eink.ic_side, self.Eink.sqr_side, full)
+        buf_bw = (bytearray(b''.join(D.draw_all(key, black_ram=True))), D.c_width(), D.c_height()) if bw else False
+        buf_red = (bytearray(b''.join(D.draw_all(key, red_ram=True))), D.c_width(), D.c_height()) if red else False
 
         setattr(self, 'ram_fl', 0) if flush else None
         draw.Drawable.flush() if flush else Drawable.reset()

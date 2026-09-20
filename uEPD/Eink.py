@@ -52,7 +52,6 @@ class EinkBase:
         self._partial = False
 
         self._init_disp() if init else None
-        sleep_ms(500)
 
     def _init_pins(self):
         self._rst.init(Pin.OUT, value=0)

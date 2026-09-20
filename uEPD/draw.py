@@ -19,11 +19,11 @@ class Drawable:
     blkl = []
     whtl = []
     fll = []
-    main_row_pointer = 0
+    main_row_pointer = False
     xspan = array('H', [_empty, _empty])
     yspan = array('H', [_empty, _empty])
     background = bytearray(b'\xff\xff')
-    #set = False
+    set = False
 
     @classmethod
     def c_width(cls):
@@ -40,7 +40,7 @@ class Drawable:
         ram_chk = black_ram + (red_ram << 1) # reducing the amount of checks for ram
         for fil in cls.fll:
             fil.setup() if fil.ram_flag & ram_chk else None
-        print(f"x span = {cls.xspan}, y span = {cls.yspan}")
+        #print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = cls.c_width()+1
         total_height = cls.c_height()
         cls.main_row_pointer = cls.yspan[0]
@@ -85,16 +85,17 @@ class Drawable:
         if int(red_ram) and int(black_ram):
             raise ValueError('Cannot draw on both red and black ram at the same time')
         ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
-        for fil in cls.fll:
-            fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
-        cls.main_row_pointer = cls.yspan[0]
-        print(f"x span = {cls.xspan}, y span = {cls.yspan}")
+        if not cls.set:
+            for fil in cls.fll:
+                fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
+                cls.main_row_pointer = cls.yspan[0]
+                cls.set = True
+        #print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = int(cls.c_width()) + 1
         bufh = lenbuf // row_w
         rows_left = int(cls.c_height()) - (int(cls.main_row_pointer) - int(cls.yspan[0]))
         max_buf_h = min(int(bufh), rows_left)
         xspan0 = int(cls.xspan[0])
-        cls.set = True
 
         bg = int(cls.background[0 if black_ram else 1])
         ln_ptr = buf
@@ -108,7 +109,7 @@ class Drawable:
                 fllptr = ptr8(int(fllptr)+1)
             for obj in cls.blkl + cls.whtl + cls.fll:
                 if (int(obj.ram_flag) & ram_chk) and int(obj.actual_y) + int(obj.row_pointer) == int(cls.main_row_pointer) and int(obj.row_pointer) < int(obj.height):
-                    first_x = int(max(0, int(obj.actual_x) // 8 - xspan0))
+                    first_x = int(max(0, (int(obj.actual_x) >> 3 ) - xspan0))
                     nxt = next(obj._gen)
                     cls.stitch(k, ln_ptr, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer = int(obj.row_pointer) + 1
@@ -202,20 +203,29 @@ class Drawable:
         self._gen = self.draw()
         self.seek(0)
 
+    @micropython.viper
     def _parse(self):
-        if self.cc == 1:
+        if int(self.cc) == 1:
             Drawable.whtl.append(self)
         else:
             Drawable.blkl.append(self)
 
-        if Drawable.xspan[0] == _empty or self.actual_x // 8 < Drawable.xspan[0]:
-            Drawable.xspan[0] = self.actual_x // 8
-        if Drawable.xspan[1] == _empty or (self.actual_x + self.shift + self.width + 7) // 8 > Drawable.xspan[1]:
-            Drawable.xspan[1] = (self.actual_x + self.shift + self.width + 7) // 8
-        if Drawable.yspan[0] == _empty or self.actual_y < Drawable.yspan[0]:
-            Drawable.yspan[0] = self.actual_y
-        if Drawable.yspan[1] == _empty or self.actual_y + self.height > Drawable.yspan[1]:
-            Drawable.yspan[1] = self.actual_y + self.height
+        xspan0 = int(Drawable.xspan[0])
+        xspan1 = int(Drawable.xspan[1])
+        yspan0 = int(Drawable.yspan[0])
+        yspan1 = int(Drawable.yspan[1])
+        act_x = int(self.actual_x)
+        act_y = int(self.actual_y)
+        _emp = int(_empty)
+
+        if xspan0 == _emp or act_x >> 3 < xspan0:
+            Drawable.xspan[0] = act_x >> 3
+        if xspan1 == _emp or (act_x + int(self.shift) + int(self.width) + 7) >> 3 > xspan1:
+            Drawable.xspan[1] = (act_x + int(self.shift) + int(self.width) + 7) >> 3
+        if yspan0 == _emp or act_y < yspan0:
+            Drawable.yspan[0] = act_y
+        if yspan1 == _emp or act_y + int(self.height) > yspan1:
+            Drawable.yspan[1] = act_y + int(self.height)
 
 class Pixel(Drawable):
     def __init__(self, x, y, color):
@@ -339,7 +349,7 @@ class Poly(Drawable):
         sy = 1 if y0 < y1 else -1
         err = dx + dy
         while True:
-            print(x0, y0)
+            #print(x0, y0)
             if x0 == x1 and y0 == y1:
                 break
             e2 = 2 * err
