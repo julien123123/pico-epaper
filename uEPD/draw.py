@@ -19,6 +19,7 @@ class Drawable:
     blkl = []
     whtl = []
     fll = []
+    tmpl = []
     main_row_pointer = False
     xspan = array('H', [_empty, _empty])
     yspan = array('H', [_empty, _empty])
@@ -44,11 +45,15 @@ class Drawable:
         row_w = cls.c_width()+1
         total_height = cls.c_height()
         cls.main_row_pointer = cls.yspan[0]
+        for group in (cls.blkl, cls.whtl, cls.fll):
+            for obj in group:
+                if int(obj.ram_flag) & ram_chk:
+                    cls.tmpl.append(obj)
 
         for line in range(total_height):
             row = bytearray([cls.background[0 if black_ram else 1]]*row_w)
-            for obj in cls.blkl + cls.whtl + cls.fll:
-                if (obj.ram_flag & ram_chk) and obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
+            for obj in cls.tmpl:
+                if obj.actual_y + obj.row_pointer == cls.main_row_pointer and obj.row_pointer < obj.height:
                     first_x = max(0, obj.actual_x // 8 - cls.xspan[0])
                     nxt = next(obj._gen)
                     cls.stitch(k, row, row_w, nxt, len(nxt), first_x)
@@ -84,17 +89,24 @@ class Drawable:
         """Draw into an object with buffer protocl. Can be re-run until epmty"""
         if int(red_ram) and int(black_ram):
             raise ValueError('Cannot draw on both red and black ram at the same time')
-        ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
+
+        y_st = int(ptr16(cls.yspan)[0])
         if not cls.set:
+            ram_chk = int(black_ram) + (int(red_ram) << 1)  # reducing the amount of checks for ram
             for fil in cls.fll:
                 fil.setup() if int(fil.ram_flag) & int(ram_chk) else None
-                cls.main_row_pointer = cls.yspan[0]
-                cls.set = True
+            cls.main_row_pointer = y_st
+            for group in (cls.blkl, cls.whtl, cls.fll):
+                for obj in group:
+                    if int(obj.ram_flag) & ram_chk:
+                        cls.tmpl.append(obj)
+            cls.set = True
+
         #print(f"x span = {cls.xspan}, y span = {cls.yspan}")
         row_w = int(cls.c_width()) + 1
         bufh = lenbuf // row_w
-        rows_left = int(cls.c_height()) - (int(cls.main_row_pointer) - int(cls.yspan[0]))
-        max_buf_h = min(int(bufh), rows_left)
+        rows_left = int(cls.c_height()) - (int(cls.main_row_pointer) - y_st)
+        max_buf_h = int(bufh) if bufh < rows_left else rows_left
         xspan0 = int(cls.xspan[0])
 
         bg = int(cls.background[0 if black_ram else 1])
@@ -107,9 +119,11 @@ class Drawable:
             while int(fllptr) < int(fllstp):
                 fllptr[0] =  bg
                 fllptr = ptr8(int(fllptr)+1)
-            for obj in cls.blkl + cls.whtl + cls.fll:
-                if (int(obj.ram_flag) & ram_chk) and int(obj.actual_y) + int(obj.row_pointer) == int(cls.main_row_pointer) and int(obj.row_pointer) < int(obj.height):
-                    first_x = int(max(0, (int(obj.actual_x) >> 3 ) - xspan0))
+            for obj in cls.tmpl:
+                if int(obj.actual_y) + int(obj.row_pointer) == int(cls.main_row_pointer) and int(obj.row_pointer) < int(obj.height):
+                    first_x = (int(obj.actual_x) >> 3 ) - xspan0
+                    if first_x > 0:
+                        first_x = 0
                     nxt = next(obj._gen)
                     cls.stitch(k, ln_ptr, row_w, nxt, len(nxt), first_x)
                     obj.row_pointer = int(obj.row_pointer) + 1
@@ -122,21 +136,24 @@ class Drawable:
         cls.blkl = []
         cls.whtl = []
         cls.fll = []
-        cls.main_row_pointer = 0
+        cls.main_row_pointer = False
         cls.xspan = array('H', [_empty, _empty])
         cls.yspan = array('H', [_empty, _empty])
         cls.background = bytearray(b'\xff\xff')
-        #cls.set = False
+        cls.set = False
+        cls.tmpl = []
 
     @classmethod
     def reset(cls):
-        cls.main_row_pointer = 0
+        cls.main_row_pointer = False
         for obj in cls.blkl:
             obj.reset_draw()
         for obj in cls.whtl:
             obj.reset_draw()
         for fl in cls.fll:
             fl.reset_draw()
+        cls.tmpl = []
+        cls.set = False
 
     @classmethod
     def second_color(cls):
@@ -156,13 +173,15 @@ class Drawable:
             cls.yspan[1] = sbh
 
         else:
-            x = int(int(cls.xspan[1])%0xffff)
-            y = int(int(cls.yspan[1])%0xffff)
-            # making sure the span is within the screen
-            cls.xspan[0] = int(cls.xspan[0])%0xffff or 0 #if cls.xspan[0] else 0
-            cls.xspan[1] = x if x <= sbw else sbw
-            cls.yspan[0] = int(cls.yspan[0])%0xffff or 0#if cls.yspan[0] else 0
-            cls.yspan[1] = y if y <= sbh else sbh #min(cls.yspan[1], screen_h-1)
+            minx = int(ptr16(cls.xspan)[0])
+            miny = int(ptr16(cls.yspan)[0])
+            maxx = int(ptr16(cls.xspan)[1])
+            maxy = int(ptr16(cls.yspan)[1])
+
+            ptr16(cls.xspan)[0] = sbw if minx >= sbw else 0 if minx <= 0 else minx
+            ptr16(cls.xspan)[1] = sbw if maxx >= sbw else 0 if maxx <= 0 else maxx
+            ptr16(cls.yspan)[0] = sbh if miny >= sbh else 0 if miny <= 0 else miny
+            ptr16(cls.yspan)[1] = sbh if maxy >= sbh else 0 if maxy <= 0 else maxy
 
     # BASIC DRAWABLE CLASS TO BE INHERITED BY ALL OTHER CLASSES
 
